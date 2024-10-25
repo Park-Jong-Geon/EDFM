@@ -12,7 +12,9 @@ beta2: 0.0001
 droprate: 0
 ema_decay: 0.99995
 version: v1.1.8
-T: 5
+T: 100
+max_t: 100
+K: 0.2
 n_feat: 128
 tag: AtoABC
 fat: 1
@@ -24,7 +26,7 @@ cls_from_scratch: False
 mixup_alpha: 0.4
 forget: 6
 linear_noise: True
-start_temp: 2
+start_temp: 1
 ensemble_prediction: 3
 dsc: True
 input_scaling: 3

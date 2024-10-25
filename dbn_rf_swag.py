@@ -428,7 +428,10 @@ def build_dbn(config):
         multi_mixup=False,
         continuous=False,
         centering=False,
-        rf_eps=config.rf_eps
+        rf_eps=config.rf_eps,
+        max_t=config.max_t,
+        steps=config.T,
+        K=config.K,
     )
     return dbn, (dsb_stats, None)
 
@@ -437,9 +440,8 @@ def rf_sample(score, rng, x0, y0=None, config=None, dsb_stats=None, z_dsb_stats=
     shape = x0.shape
     batch_size = shape[0]
     n_T = config.T
-    rf_eps = config.rf_eps
-    timesteps = jnp.linspace(rf_eps, 1., n_T)
-    timesteps = jnp.concatenate([jnp.array([0]), timesteps], axis=0)
+    max_t = config.max_t
+    timesteps = jnp.linspace(0., 1., n_T+1)
 
     @jax.jit
     def body_fn(n, val):
@@ -447,8 +449,8 @@ def rf_sample(score, rng, x0, y0=None, config=None, dsb_stats=None, z_dsb_stats=
             n in [0, self.n_T - 1]
         """
         x_n = val
-        current_t = jnp.array([timesteps[n_T - n]])
-        next_t = jnp.array([timesteps[n_T - n - 1]])
+        current_t = jnp.array([timesteps[n]])
+        next_t = jnp.array([timesteps[n+1]])
         current_t = jnp.tile(current_t, [batch_size])
         next_t = jnp.tile(next_t, [batch_size])
 
@@ -924,13 +926,10 @@ def launch(config, print_fn):
         #         a*mse_loss(epsilon, (l_t-logitsC)) + (1-a)*score_loss
         #     )
         new_model_state = output[1] if train else None
-        (
-            epsilon, l1, _, _, _
-        ), logits0eps = output[0] if train else output
+        epsilon, diff = output[0] if train else output
 
-        diff = (l1-_logitsA)
-        # score_loss = mse_loss(epsilon, diff)
-        score_loss = pseudohuber_loss(epsilon, diff)
+        score_loss = mse_loss(epsilon, diff)
+        # score_loss = pseudohuber_loss(epsilon, diff)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
             a = config.distill_alpha

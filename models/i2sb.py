@@ -3570,6 +3570,9 @@ class RectifiedFlowBridgeNetwork(nn.Module):
     rand_temp: bool = False
     centering: bool = False
     rf_eps: float = None
+    max_t: float = 1000.
+    steps: float = 1000.
+    K: float = 0.2
 
     def setup(self):
         self.base = self.base_net()
@@ -3602,48 +3605,28 @@ class RectifiedFlowBridgeNetwork(nn.Module):
     def __call__(self, *args, **kwargs):
         return self.conditional_dbn(*args, **kwargs)
 
-    # def set_logit(self, rng, l1, training=True, **kwargs):
-    #     if self.forget == -1: # rebuttal
-    #         l1 = jax.random.normal(rng, l1.shape)
-    #         return l1
-    #     T = self.start_temp
-    #     _, temp_rng = jax.random.split(rng)
-    #     if training:
-    #         T += 0.4*jax.random.beta(temp_rng, 1, 5)
-    #     else:
-    #         T += 0.4*(1/6)  # mean of beta distribution
-    #     l1 = l1/T
-    #     return l1
-
-    # def conditional_dbn(self, rng, l0, x1, base_params=None, cls_params=None, **kwargs):
-    #     z1 = self.encode(x1, base_params, **kwargs)
-    #     l1 = self.classify(z1, cls_params, **kwargs)
-    #     l1 = l1 / self.start_temp
-    #     # l1 = self.set_logit(rng, l1, **kwargs)
-    #     l_t, t, _, _, _ = self.forward(rng, l0, l1)
-    #     eps = self.score(l_t, z1, t, **kwargs)
-    #     return (eps, l_t, t, None, None), None
     def conditional_dbn(self, rng, l0, x1, base_params=None, cls_params=None, **kwargs):
         z1 = self.encode(x1, base_params, **kwargs)
-        l1 = self.classify(z1, cls_params, **kwargs)
-        l1 = l1 / self.start_temp
-        # l1 = self.set_logit(rng, l1, **kwargs)
-        l_t, t, _, _, _ = self.forward(rng, l0, l1)
+        self.classify(z1, cls_params, **kwargs)
+        
+        l_t, t, diff = self.forward(rng, l0)
         eps = self.score(l_t, z1, t, **kwargs)
-        return (eps, l1, None, None, None), None
+        return eps, diff
 
-    def forward(self, rng, x0, x1, _ts=None, dsb_stats=None):
-        if dsb_stats is None:
-            dsb_stats = self.dsb_stats
+    def forward(self, rng, l_label, t=None):
+        # Sample t
+        t_rng, n_rng, d_rng = jax.random.split(rng, 3)
+        if t is None:
+            t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=self.max_t)  # (B,)
 
-        t_rng, n_rng = jax.random.split(rng, 2)
+        # Sample noise
+        z = jax.random.normal(n_rng, l_label.shape)
+        _t = t[:, None]
+        x_t = _t / (_t + self.K) * l_label + z / (_t + self.K)
 
-        if _ts is None:
-            _ts = jax.random.uniform(
-                t_rng, (x0.shape[0],), minval=self.rf_eps, maxval=1.)  # (B,)
-        x_t = batch_mul((1-_ts), x0) + batch_mul(_ts, x1)
-
-        return x_t, _ts, x_t, None, _ts
+        # Compute diff
+        u_t = (l_label - x_t) / (_t + self.K)
+        return x_t, t, u_t
 
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
@@ -3651,10 +3634,7 @@ class RectifiedFlowBridgeNetwork(nn.Module):
     def conditional_sample(self, rng, sampler, x):
         zB = self.encode(x, training=False)
         lB = self.classify(zB, training=False)
-        _lB = lB
-        _lB = _lB / self.start_temp
-        # _lB = self.set_logit(rng, _lB, training=False)
         lC = sampler(
-            partial(self.score, training=False), rng, _lB, zB)
+            partial(self.score, training=False), rng, lB, zB)
         lC = lC[None, ...]
         return lC, lB
