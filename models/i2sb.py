@@ -3610,6 +3610,7 @@ class RectifiedFlowBridgeNetwork(nn.Module):
         self.classify(z1, cls_params, **kwargs)
         
         l_t, t, diff = self.forward(rng, l0)
+        diff = jax.nn.softmax(diff)
         eps = self.score(l_t, z1, t, **kwargs)
         return eps, diff
 
@@ -3626,14 +3627,17 @@ class RectifiedFlowBridgeNetwork(nn.Module):
 
         # Compute diff
         u_t = (l_label - x_t) / (_t + self.K)
-        return x_t, t, u_t
+        
+        next_x_t = x_t + (self.max_t / self.steps) * u_t
+        return x_t, t, next_x_t
 
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
 
     def conditional_sample(self, rng, sampler, x):
         zB = self.encode(x, training=False)
-        lB = self.classify(zB, training=False)
+        _lB = self.classify(zB, training=False)
+        lB = jax.random.normal(rng, _lB.shape) / self.K
         lC = sampler(
             partial(self.score, training=False), rng, lB, zB)
         lC = lC[None, ...]

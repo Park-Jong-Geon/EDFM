@@ -450,13 +450,13 @@ def rf_sample(score, rng, x0, y0=None, config=None, dsb_stats=None, z_dsb_stats=
         """
         x_n = val
         current_t = jnp.array([timesteps[n]])
-        next_t = jnp.array([timesteps[n+1]])
+        # next_t = jnp.array([timesteps[n+1]])
         current_t = jnp.tile(current_t, [batch_size])
-        next_t = jnp.tile(next_t, [batch_size])
+        # next_t = jnp.tile(next_t, [batch_size])
 
         eps = score(x_n, y0, t=current_t)
-
-        x_n = x_n + batch_mul(next_t - current_t, eps)
+        x_n = eps
+        # x_n = x_n + batch_mul(next_t - current_t, eps)
 
         return x_n
 
@@ -760,6 +760,12 @@ def launch(config, print_fn):
         return loss
     
     @jax.jit
+    def ce_loss_with_target(logits, target):
+        pred = jax.nn.log_softmax(logits, axis=-1)
+        loss = -jnp.sum(target*pred, axis=-1)
+        return loss
+    
+    @jax.jit
     def ce_loss(logits, labels):
         target = common_utils.onehot(labels, num_classes=logits.shape[-1])
         pred = jax.nn.log_softmax(logits, axis=-1)
@@ -928,7 +934,8 @@ def launch(config, print_fn):
         new_model_state = output[1] if train else None
         epsilon, diff = output[0] if train else output
 
-        score_loss = mse_loss(epsilon, diff)
+        score_loss = ce_loss_with_target(epsilon, diff)
+        # score_loss = mse_loss(epsilon, diff)
         # score_loss = pseudohuber_loss(epsilon, diff)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
