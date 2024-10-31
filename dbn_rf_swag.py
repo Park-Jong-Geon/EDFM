@@ -441,7 +441,7 @@ def rf_sample(score, rng, x0, y0=None, config=None, dsb_stats=None, z_dsb_stats=
     batch_size = shape[0]
     n_T = config.T
     max_t = config.max_t
-    timesteps = jnp.linspace(0., 1., n_T+1)
+    timesteps = jnp.linspace(0., max_t, n_T+1)
 
     @jax.jit
     def body_fn(n, val):
