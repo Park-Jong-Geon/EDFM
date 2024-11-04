@@ -994,7 +994,7 @@ def launch(config, print_fn):
             grads=grads, batch_stats=new_model_state.get("batch_stats"))
         a = config.ema_decay
         def update_ema(wt, ema_tm1): return jnp.where(
-            (wt != ema_tm1) & (a < 1), a*wt + (1-a)*ema_tm1, wt)
+            (wt != ema_tm1) & (a < 1), (1-a)*wt + a*ema_tm1, wt)
         new_state = new_state.replace(
             ema_params=jax.tree_util.tree_map(
                 update_ema,

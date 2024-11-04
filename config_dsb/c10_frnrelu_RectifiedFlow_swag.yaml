@@ -10,10 +10,10 @@ optim_weight_decay: 0
 beta: 0.5
 beta2: 0.0001
 droprate: 0
-ema_decay: 0.99995
+ema_decay: 0.
 version: v1.1.8
-T: 2000
-max_t: 2000
+T: 100
+max_t: 100
 K: 0.2
 n_feat: 128
 tag: AtoABC
