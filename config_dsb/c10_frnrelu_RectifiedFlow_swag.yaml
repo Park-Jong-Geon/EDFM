@@ -12,8 +12,8 @@ beta2: 0.0001
 droprate: 0
 ema_decay: 0.
 version: v1.1.8
-T: 100
-max_t: 100
+T: 2000 #100
+max_t: 2000 #100
 K: 0.2
 n_feat: 128
 tag: AtoABC
@@ -37,13 +37,13 @@ rf_eps: 0.001
 
 num_target_samples: 3
 swag_ckpt_dir:
-  ['checkpoints/sgd_swag_156800/checkpoint_300',
-  'checkpoints/sgd_swag_438850/checkpoint_300',
-  'checkpoints/sgd_swag_249130/checkpoint_300',
-  'checkpoints/sgd_swag_959000/checkpoint_300',
-  'checkpoints/sgd_swag_36750/checkpoint_300',
-  'checkpoints/sgd_swag_495000/checkpoint_300',
-  'checkpoints/sgd_swag_203500/checkpoint_300',
-  'checkpoints/sgd_swag_779350/checkpoint_300',
-  'checkpoints/sgd_swag_190430/checkpoint_300',
-  'checkpoints/sgd_swag_130100/checkpoint_300',]
+  ['checkpoints/sgd_swag/c10_new/sgd_swag_2/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_5/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_11/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_17/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_23/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_31/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_41/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_47/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_59/checkpoint_1000',
+  'checkpoints/sgd_swag/c10_new/sgd_swag_67/checkpoint_1000',]
