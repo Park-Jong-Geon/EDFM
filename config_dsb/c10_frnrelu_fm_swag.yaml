@@ -6,6 +6,7 @@ model_name: FlaxResNet
 
 score_model_depth: 32
 score_model_width: 2
+emb_dim: 32
 
 optim_bs: 128
 optim_ne: 800

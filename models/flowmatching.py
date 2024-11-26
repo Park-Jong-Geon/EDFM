@@ -53,6 +53,7 @@ class FlaxResNetwithCondition(nn.Module):
     num_blocks: Tuple[int] = None
     first_conv: Tuple[int] = None
     first_pool: Tuple[int] = None
+    emb_dim: int = 32
 
     @nn.compact
     def __call__(self, p, x, t, **kwargs):
@@ -118,55 +119,32 @@ class FlaxResNetwithCondition(nn.Module):
         self.sow('intermediates', 'feature.layer0', y)
 
         # add conditions...
-        t = timestep_embedding(t, 2*num_planes)
-        t = self.fc(features=num_planes)(t)
-        t = self.relu(t)
-        t = self.fc(features=num_planes)(t)
+        t = timestep_embedding(t, self.emb_dim)
+        t = self.fc(features=2*self.emb_dim)(t)
         t = self.relu(t)
 
-        p = self.fc(features=num_planes)(p)
+        p = self.fc(features=self.emb_dim)(p)
         p = self.relu(p)
-        p = self.fc(features=num_planes)(p)
+        p = self.fc(features=2*self.emb_dim)(p)
         p = self.relu(p)
-        
-        # t = t[:, None, None, :]
-        # t = jnp.tile(t, reps=[1, y.shape[1], y.shape[2], 1])
-        
-        # p = p[:, None, None, :]
-        # p = jnp.tile(p, reps=[1, y.shape[1], y.shape[2], 1])
 
         # define intermediate layers...
-        prev_stride = 1
         for layer_idx, num_block in enumerate(num_blocks):
             # add conditions...
-            _t = self.fc(features=y.shape[-1])(t)
+            _t = self.fc(features=2*y.shape[-1])(t)
+            _t = self.relu(_t)
+            
             _p = self.fc(features=y.shape[-1])(p)
-            _t = _t[:, None, None, :]
-            _p = _p[:, None, None, :]
-            y = y + _t + _p
-            # _t = self.conv(
-            #     features=2*y.shape[-1],
-            #     kernel_size=(3, 3),
-            #     strides=(prev_stride, prev_stride),
-            #     padding='SAME',
-            #     dtype=self.dtype,
-            # )(t)
-            # _p = self.conv(
-            #     features=y.shape[-1],
-            #     kernel_size=(3, 3),
-            #     strides=(prev_stride, prev_stride),
-            #     padding='SAME',
-            #     dtype=self.dtype,
-            # )(p)
-            # y = jnp.concatenate([y, _p], axis=-1) + _t
+            _p = self.relu(_p)
+            
+            rep_p = jnp.tile(_p[:, None, None, :], reps=[1, y.shape[1], y.shape[2], 1])
+            y = jnp.concatenate([y, rep_p], axis=-1) + _t[:, None, None, :]
 
             _strides = (1,) if layer_idx == 0 else (2,)
             _strides = _strides + (1,) * (num_block - 1)
-            prev_stride = _strides[0]
             for _stride_idx, _stride in enumerate(_strides, start=1):
                 _channel = num_planes * (2 ** layer_idx)
                 residual = y
-                _y = y
                 y = self.conv(
                     features=int(_channel * widen_factor),
                     kernel_size=(3, 3),

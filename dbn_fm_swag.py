@@ -28,6 +28,7 @@ from data.build import build_dataloaders
 from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
 from models.resnet import FlaxResNet, FlaxResNetBase
+from models.i2sb import ClsUnet
 from models.flowmatching import FlaxResNetwithCondition, FlowMatching
 from collections import OrderedDict
 from tqdm import tqdm
@@ -148,7 +149,8 @@ def get_scorenet(config):
                 int(b) for b in config.model_blocks.split(",")
             ) if config.model_blocks is not None else None,
             first_conv=config.first_conv,
-            first_pool=config.first_pool
+            first_pool=config.first_pool,
+            emb_dim=config.emb_dim,
         )
 
     if config.model_style == 'BN-ReLU':
@@ -166,6 +168,25 @@ def get_scorenet(config):
 
     return model
 
+# def get_scorenet(config):
+#     score_input_dim = (32, 32, 32)
+#     in_channels = score_input_dim[-1]
+#     num_channels = in_channels//32 * 128
+
+#     score_func = partial(
+#         ClsUnet,
+#         num_input=1,
+#         p_dim=10,
+#         z_dim=(32, 32, 32),
+#         ch=num_channels,
+#         joint=2,
+#         depth=6,
+#         version="v1.1.8",
+#         droprate=0,
+#         input_scaling=3,
+#         width_multi=2
+#     )
+#     return score_func
 
 def build_dbn(config):
     score_net = get_scorenet(config)
