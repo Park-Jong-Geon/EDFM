@@ -125,20 +125,22 @@ class FlaxResNetwithCondition(nn.Module):
 
         p = self.fc(features=self.emb_dim)(p)
         p = self.relu(p)
+        p = self.fc(features=1)(p)
+        p = self.relu(p)
+        p = timestep_embedding(p, self.emb_dim)
         p = self.fc(features=2*self.emb_dim)(p)
         p = self.relu(p)
 
         # define intermediate layers...
         for layer_idx, num_block in enumerate(num_blocks):
             # add conditions...
-            _t = self.fc(features=2*y.shape[-1])(t)
+            _t = self.fc(features=y.shape[-1])(t)
             _t = self.relu(_t)
             
             _p = self.fc(features=y.shape[-1])(p)
             _p = self.relu(_p)
             
-            rep_p = jnp.tile(_p[:, None, None, :], reps=[1, y.shape[1], y.shape[2], 1])
-            y = jnp.concatenate([y, rep_p], axis=-1) + _t[:, None, None, :]
+            y += _p[:, None, None, :] + _t[:, None, None, :]
 
             _strides = (1,) if layer_idx == 0 else (2,)
             _strides = _strides + (1,) * (num_block - 1)
