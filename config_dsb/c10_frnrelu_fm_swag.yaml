@@ -4,9 +4,10 @@ model_width: 2
 model_style: FRN-Swish
 model_name: FlaxResNet
 
-score_model_depth: 32
-score_model_width: 2
+# MLP-mixer
 emb_dim: 32
+num_blocks: 8
+fourier_scale: 1.
 
 optim_bs: 128
 optim_ne: 800
@@ -14,9 +15,10 @@ optim_lr: 0.00025
 optim_weight_decay: 0
 ema_decay: 0.
 
-T: 10
-max_t: 10
+T: 20
+max_t: 20
 K: 0.2
+scale: 1000.
 
 mixup_alpha: 0.4
 

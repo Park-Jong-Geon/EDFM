@@ -7,6 +7,8 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 
+from .mlp_mixer import MlpMixer
+
 def timestep_embedding(timesteps, dim, max_period=10000):
     """
     Create sinusoidal timestep embeddings.
@@ -206,23 +208,79 @@ class FlaxResNetwithCondition(nn.Module):
         return y
 
 
+class GaussianFourierProjection(nn.Module):
+    """Gaussian Fourier embeddings for noise levels."""
+    embedding_size: int = 256
+    scale: float = 1.0
+
+    @nn.compact
+    def __call__(self, x):
+        W = self.param(
+            "W", jax.nn.initializers.normal(stddev=self.scale), (self.embedding_size,)
+        )
+        W = jax.lax.stop_gradient(W)
+        x_proj = x[:, None] * W[None, :] * 2 * jnp.pi
+        return jnp.concatenate([jnp.sin(x_proj), jnp.cos(x_proj)], axis=-1)
+    
+
+class MlpBridge(nn.Module):
+    emb_dim: int = 256
+    num_blocks: int = 32
+    fourier_scale: float = 1.
+    act:          Callable = nn.gelu
+    fc:           nn.Module = functools.partial(nn.Dense, use_bias=True,
+                                      kernel_init=jax.nn.initializers.he_normal(),
+                                      bias_init=jax.nn.initializers.zeros)
+    
+    @nn.compact
+    def __call__(self, p, c, t, **kwargs):
+        # Probability embedding
+        p_emb = self.fc(self.emb_dim)(p)
+        p_emb = self.act(p_emb)
+        p_emb = self.fc(self.emb_dim)(p_emb)
+        p_emb = self.act(p_emb)
+        
+        # Timestep embedding; Gaussian Fourier features embeddings
+        t_emb = GaussianFourierProjection(embedding_size=self.emb_dim, scale=self.fourier_scale)(t)
+        t_emb = self.fc(self.emb_dim)(t_emb)
+        t_emb = self.act(t_emb)
+        t_emb = self.fc(self.emb_dim)(t_emb)
+        t_emb = self.act(t_emb)
+        
+        # Image features embedding
+        z_emb = self.fc(self.emb_dim)(c)
+        z_emb = self.act(z_emb)
+        z_emb = self.fc(self.emb_dim)(z_emb)
+        z_emb = self.act(z_emb)
+
+        emb = jnp.concatenate([z_emb, t_emb], axis=-1)
+        h = MlpMixer(out_dim=p.shape[-1], 
+                     num_blocks=self.num_blocks, 
+                     mlp_dim=self.emb_dim)(p_emb, emb)
+        return h
+    
+
 class FlowMatching(nn.Module):
+    res_net: Sequence[nn.Module]
     score_net: Sequence[nn.Module]
     max_t: float = 2000.
     steps: float = 2000.
     K: float = 0.2
     num_classes: int = 10
+    scale: float = 10.
 
     def setup(self):
+        self.resnet = self.res_net()
         self.score = self.score_net()
 
     def __call__(self, *args, **kwargs):
         return self.conditional_dbn(*args, **kwargs)
 
-    def conditional_dbn(self, rng, l0, x, **kwargs):        
-        l_t, t, next_l_t = self.forward(rng, l0)
-        next_l_t = jax.nn.softmax(next_l_t)
-        eps = self.score(l_t, x, t, **kwargs)
+    def conditional_dbn(self, rng, l0, x, **kwargs):
+        c = self.resnet(x, **kwargs)        
+        # l_t, t, next_l_t = self.forward(rng, self.scale*(l0-c))
+        # next_l_t = jax.nn.softmax(next_l_t)
+        eps = self.score(l_t, c, t, **kwargs)
         return eps, next_l_t
 
     def forward(self, rng, l_label):
@@ -245,8 +303,9 @@ class FlowMatching(nn.Module):
         return self.conditional_sample(*args, **kwargs)
 
     def conditional_sample(self, rng, sampler, x):
+        c = self.resnet(x, training=False)
         lB = jax.random.normal(rng, (x.shape[0], self.num_classes)) / self.K
         lC = sampler(
-            functools.partial(self.score, training=False), lB, x)
+            functools.partial(self.score, training=False), lB, c)
         lC = lC[None, ...]
         return lC, lB

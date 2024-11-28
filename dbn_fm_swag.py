@@ -29,7 +29,7 @@ from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
 from models.resnet import FlaxResNet, FlaxResNetBase
 from models.i2sb import ClsUnet
-from models.flowmatching import FlaxResNetwithCondition, FlowMatching
+from models.flowmatching import MlpBridge, FlowMatching
 from collections import OrderedDict
 from tqdm import tqdm
 from utils import WandbLogger
@@ -135,70 +135,27 @@ def pdict(params, batch_stats=None, image_stats=None):
 
 
 def get_scorenet(config):
-    if config.model_name == 'FlaxResNet':
-        _ResNet = partial(
-            FlaxResNetwithCondition,
-            depth=config.score_model_depth,
-            widen_factor=config.score_model_width,
-            dtype=config.dtype,
-            pixel_mean=defaults.PIXEL_MEAN,
-            pixel_std=defaults.PIXEL_STD,
-            num_classes=config.num_classes,
-            num_planes=config.model_planes,
-            num_blocks=tuple(
-                int(b) for b in config.model_blocks.split(",")
-            ) if config.model_blocks is not None else None,
-            first_conv=config.first_conv,
-            first_pool=config.first_pool,
-            emb_dim=config.emb_dim,
-        )
-
-    if config.model_style == 'BN-ReLU':
-        model = _ResNet
-    elif config.model_style == "FRN-Swish":
-        model = partial(
-            _ResNet,
-            conv=partial(
-                flax.linen.Conv,
-                use_bias=not config.model_nobias,
-                kernel_init=jax.nn.initializers.he_normal(),
-                bias_init=jax.nn.initializers.zeros),
-            norm=FilterResponseNorm,
-            relu=flax.linen.swish)
-
-    return model
-
-# def get_scorenet(config):
-#     score_input_dim = (32, 32, 32)
-#     in_channels = score_input_dim[-1]
-#     num_channels = in_channels//32 * 128
-
-#     score_func = partial(
-#         ClsUnet,
-#         num_input=1,
-#         p_dim=10,
-#         z_dim=(32, 32, 32),
-#         ch=num_channels,
-#         joint=2,
-#         depth=6,
-#         version="v1.1.8",
-#         droprate=0,
-#         input_scaling=3,
-#         width_multi=2
-#     )
-#     return score_func
+    score_func = partial(
+        MlpBridge,
+        emb_dim=config.emb_dim,
+        num_blocks=config.num_blocks,
+        fourier_scale=config.fourier_scale,
+    )
+    return score_func
 
 def build_dbn(config):
+    resnet = get_resnet(config, head=True)
     score_net = get_scorenet(config)
     dbn = FlowMatching(
+        res_net=resnet,
         score_net=score_net,
         max_t=config.max_t,
         steps=config.T,
         K=config.K,
         num_classes=config.num_classes,
+        scale=config.scale,
     )
     return dbn
-
 
 def fm_sample(score, l0, x, config, steps):
     batch_size = l0.shape[0]
@@ -221,6 +178,8 @@ def fm_sample(score, l0, x, config, steps):
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
+        if i == steps-1:
+            val = x + val / config.scale
         x_list.append(val)
 
     return jnp.concatenate(x_list, axis=0)
@@ -365,6 +324,10 @@ def launch(config, print_fn):
         batch_stats=variables.get("batch_stats"),
         rng=state_rng
     )
+    # Load ResNet
+    state = state.replace(params=freeze(dict(resnet=swag_state_list[0].mean, 
+                                             score=state.params["score"])),)
+
     if config.resume:
         last_epochs = config.last_epoch_idx + 1
         saved_iteration = config.trn_steps_per_epoch * last_epochs
@@ -736,9 +699,13 @@ def launch(config, print_fn):
     wandb.define_metric("val/acc", summary="max")
     wandb.define_metric("val/ens_acc", summary="max")
     wandb.define_metric("val/ens_nll", summary="min")
+    wandb.run.summary["params_resnet"] = (
+        sum(x.size for x in jax.tree_util.tree_leaves(
+            variables["params"]["resnet"]))
+    )
     wandb.run.summary["params_score"] = (
         sum(x.size for x in jax.tree_util.tree_leaves(
-            variables["params"]))
+            variables["params"]["score"]))
     )
     # params_flatten = flax.traverse_util.flatten_dict(
     #     variables["params"]["score"])
