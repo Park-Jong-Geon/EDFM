@@ -18,7 +18,6 @@ ema_decay: 0.
 T: 20
 max_t: 20
 K: 0.2
-scale: 1000.
 
 mixup_alpha: 0.4
 

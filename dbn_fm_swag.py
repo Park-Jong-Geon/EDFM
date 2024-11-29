@@ -153,7 +153,6 @@ def build_dbn(config):
         steps=config.T,
         K=config.K,
         num_classes=config.num_classes,
-        scale=config.scale,
     )
     return dbn
 
@@ -178,8 +177,6 @@ def fm_sample(score, l0, x, config, steps):
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
-        if i == steps-1:
-            val = x + val / config.scale
         x_list.append(val)
 
     return jnp.concatenate(x_list, axis=0)
@@ -305,13 +302,37 @@ def launch(config, print_fn):
         init_value=config.optim_lr,
         decay_steps=config.optim_ne * config.trn_steps_per_epoch)
 
+    # if config.optim_base == "adam":
+    #     optimizer = optax.adamw(learning_rate=scheduler, weight_decay=config.optim_weight_decay)
+    # elif config.optim_base == "sgd":
+    #     optimizer = optax.sgd(learning_rate=scheduler, momentum=config.optim_momentum)
+    # else:
+    #     raise NotImplementedError
     if config.optim_base == "adam":
-        optimizer = optax.adamw(learning_rate=scheduler, weight_decay=config.optim_weight_decay)
+        base_optim = partial(
+            optax.adamw, learning_rate=scheduler, weight_decay=config.optim_weight_decay
+        )
     elif config.optim_base == "sgd":
-        optimizer = optax.sgd(learning_rate=scheduler, momentum=config.optim_momentum)
+        base_optim = partial(optax.sgd, learning_rate=scheduler,
+                             momentum=config.optim_momentum)
     else:
         raise NotImplementedError
-
+    
+    partition_optimizers = {
+        "resnet": base_optim(),
+        "score": base_optim(),
+    }
+    def tagging(path, v):
+        if "resnet" in path:
+            return "resnet"
+        elif "score" in path:
+            return "score"
+        else:
+            raise NotImplementedError
+    partitions = flax.core.freeze(
+        flax.traverse_util.path_aware_map(tagging, variables["params"]))
+    optimizer = optax.multi_transform(partition_optimizers, partitions)
+    
     # ------------------------------------------------------------------------
     # create train state
     # ------------------------------------------------------------------------

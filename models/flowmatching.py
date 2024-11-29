@@ -267,7 +267,6 @@ class FlowMatching(nn.Module):
     steps: float = 2000.
     K: float = 0.2
     num_classes: int = 10
-    scale: float = 10.
 
     def setup(self):
         self.resnet = self.res_net()
@@ -278,8 +277,8 @@ class FlowMatching(nn.Module):
 
     def conditional_dbn(self, rng, l0, x, **kwargs):
         c = self.resnet(x, **kwargs)        
-        # l_t, t, next_l_t = self.forward(rng, self.scale*(l0-c))
-        # next_l_t = jax.nn.softmax(next_l_t)
+        l_t, t, next_l_t = self.forward(rng, l0)
+        next_l_t = jax.nn.softmax(next_l_t)
         eps = self.score(l_t, c, t, **kwargs)
         return eps, next_l_t
 
