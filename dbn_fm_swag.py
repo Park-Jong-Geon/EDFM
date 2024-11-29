@@ -319,7 +319,7 @@ def launch(config, print_fn):
         raise NotImplementedError
     
     partition_optimizers = {
-        "resnet": base_optim(),
+        "resnet": optax.set_to_zero(), #base_optim(),
         "score": base_optim(),
     }
     def tagging(path, v):

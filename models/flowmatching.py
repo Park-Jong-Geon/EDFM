@@ -277,12 +277,12 @@ class FlowMatching(nn.Module):
 
     def conditional_dbn(self, rng, l0, x, **kwargs):
         c = self.resnet(x, **kwargs)        
-        l_t, t, next_l_t = self.forward(rng, l0)
+        l_t, t, next_l_t = self.forward(rng, l0, c)
         next_l_t = jax.nn.softmax(next_l_t)
         eps = self.score(l_t, c, t, **kwargs)
         return eps, next_l_t
 
-    def forward(self, rng, l_label):
+    def forward(self, rng, l_label, c):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
         t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=self.max_t)  # (B,)
@@ -290,7 +290,7 @@ class FlowMatching(nn.Module):
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
         _t = t[:, None]
-        x_t = _t / (_t + self.K) * l_label + z / (_t + self.K)
+        x_t = (self.K * c + _t * l_label) / (_t + self.K) + z / (_t + self.K)
 
         # Compute diff
         u_t = (l_label - x_t) / (_t + self.K)
@@ -303,7 +303,7 @@ class FlowMatching(nn.Module):
 
     def conditional_sample(self, rng, sampler, x):
         c = self.resnet(x, training=False)
-        lB = jax.random.normal(rng, (x.shape[0], self.num_classes)) / self.K
+        lB = c + jax.random.normal(rng, (x.shape[0], self.num_classes)) / self.K
         lC = sampler(
             functools.partial(self.score, training=False), lB, c)
         lC = lC[None, ...]
