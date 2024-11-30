@@ -149,24 +149,18 @@ def build_dbn(config):
     dbn = FlowMatching(
         res_net=resnet,
         score_net=score_net,
-        max_t=config.max_t,
         steps=config.T,
-        K=config.K,
+        var=config.var,
         num_classes=config.num_classes,
     )
     return dbn
 
 def fm_sample(score, l0, x, config, steps):
     batch_size = l0.shape[0]
-    n_T = config.T
-    max_t = config.max_t
-    timesteps = jnp.linspace(0., max_t, n_T+1)
+    timesteps = jnp.linspace(0., 1., steps+1)
 
     @jax.jit
     def body_fn(n, l_n):
-        """
-            n in [0, self.n_T - 1]
-        """
         current_t = jnp.array([timesteps[n]])
         current_t = jnp.tile(current_t, [batch_size])
 

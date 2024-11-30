@@ -263,9 +263,8 @@ class MlpBridge(nn.Module):
 class FlowMatching(nn.Module):
     res_net: Sequence[nn.Module]
     score_net: Sequence[nn.Module]
-    max_t: float = 2000.
-    steps: float = 2000.
-    K: float = 0.2
+    steps: float = 100.
+    var: float = 0.2
     num_classes: int = 10
 
     def setup(self):
@@ -285,17 +284,17 @@ class FlowMatching(nn.Module):
     def forward(self, rng, l_label, c):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
-        t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=self.max_t)  # (B,)
+        t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-1/self.steps)  # (B,)
 
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
         _t = t[:, None]
-        x_t = (self.K * c + _t * l_label) / (_t + self.K) + z / (_t + self.K)
+        x_t = (1-_t) * c + _t * l_label + (1-_t) * self.var * z
 
         # Compute diff
-        u_t = (l_label - x_t) / (_t + self.K)
+        u_t = (l_label - x_t) / (1-_t)
         
-        next_x_t = x_t + (self.max_t / self.steps) * u_t
+        next_x_t = x_t + (1 / self.steps) * u_t
         return x_t, t, next_x_t
 
     def sample(self, *args, **kwargs):
@@ -303,7 +302,7 @@ class FlowMatching(nn.Module):
 
     def conditional_sample(self, rng, sampler, x):
         c = self.resnet(x, training=False)
-        lB = c + jax.random.normal(rng, (x.shape[0], self.num_classes)) / self.K
+        lB = c + self.var * jax.random.normal(rng, (x.shape[0], self.num_classes))
         lC = sampler(
             functools.partial(self.score, training=False), lB, c)
         lC = lC[None, ...]
