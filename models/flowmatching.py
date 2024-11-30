@@ -289,7 +289,8 @@ class FlowMatching(nn.Module):
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
         _t = t[:, None]
-        x_t = (1-_t) * c + _t * l_label + (1-_t) * self.var * z
+        # x_t = (1-_t) * c + _t * l_label + (1-_t) * self.var * z
+        x_t = _t * l_label + (1-_t) * self.var * z
 
         # Compute diff
         u_t = (l_label - x_t) / (1-_t)
@@ -302,7 +303,8 @@ class FlowMatching(nn.Module):
 
     def conditional_sample(self, rng, sampler, x):
         c = self.resnet(x, training=False)
-        lB = c + self.var * jax.random.normal(rng, (x.shape[0], self.num_classes))
+        # lB = c + self.var * jax.random.normal(rng, (x.shape[0], self.num_classes))
+        lB = self.var * jax.random.normal(rng, (x.shape[0], self.num_classes))
         lC = sampler(
             functools.partial(self.score, training=False), lB, c)
         lC = lC[None, ...]
