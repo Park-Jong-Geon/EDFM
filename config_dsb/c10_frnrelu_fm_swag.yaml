@@ -15,7 +15,7 @@ optim_lr: 0.001 #0.00025
 optim_weight_decay: 0
 ema_decay: 0.
 
-T: 20
+T: 5
 var: 125
 
 mixup_alpha: 0.4

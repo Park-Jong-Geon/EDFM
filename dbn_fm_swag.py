@@ -44,6 +44,7 @@ from sgd_swag import update_swag_batch_stats
 from collections import namedtuple
 import copy
 from models.hungarian_cover import hungarian_cover_tpu_matcher
+from utils import batch_mul
 
 random.seed(0)
 
@@ -168,8 +169,11 @@ def fm_sample(score, l0, x, config, steps):
         current_t = jnp.array([timesteps[n]])
         current_t = jnp.tile(current_t, [batch_size])
 
-        l_n = score(l_n, x, t=current_t)
-        return l_n
+        next_t = jnp.array([timesteps[n+1]])
+        next_t = jnp.tile(next_t, [batch_size])
+
+        eps = score(l_n, x, t=current_t)
+        return l_n + batch_mul(next_t-current_t, eps)
 
     x_list = [jax.nn.softmax(l0).reshape(-1, config.num_models, config.num_classes).mean(1)]
     val = l0
@@ -537,8 +541,8 @@ def launch(config, print_fn):
         new_model_state = output[1] if train else None
         epsilon, next_l_t = output[0] if train else output
 
-        score_loss = ce_loss_with_target(epsilon, next_l_t)
-        # score_loss = mse_loss(epsilon, next_l_t)
+        # score_loss = ce_loss_with_target(epsilon, next_l_t)
+        score_loss = mse_loss(epsilon, next_l_t)
         # score_loss = pseudohuber_loss(epsilon, next_l_t)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
