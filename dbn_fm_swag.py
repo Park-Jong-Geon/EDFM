@@ -2,7 +2,7 @@ from builtins import NotImplementedError
 import os
 import orbax
 from easydict import EasyDict
-
+import random
 
 from typing import Any
 
@@ -43,6 +43,9 @@ from swag import sample_swag_diag
 from sgd_swag import update_swag_batch_stats
 from collections import namedtuple
 import copy
+from models.hungarian_cover import hungarian_cover_tpu_matcher
+
+random.seed(0)
 
 class TrainState(train_state.TrainState):
     rng: Any
@@ -152,6 +155,7 @@ def build_dbn(config):
         steps=config.T,
         var=config.var,
         num_classes=config.num_classes,
+        num_models=config.num_models,
     )
     return dbn
 
@@ -167,16 +171,24 @@ def fm_sample(score, l0, x, config, steps):
         l_n = score(l_n, x, t=current_t)
         return l_n
 
-    x_list = [l0]
+    x_list = [jax.nn.softmax(l0).reshape(-1, config.num_models, config.num_classes).mean(1)]
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
-        x_list.append(val)
+        x_list.append(jax.nn.softmax(val).reshape(-1, config.num_models, config.num_classes).mean(1))
 
-    return jnp.concatenate(x_list, axis=0)
+    return jnp.concatenate(x_list, axis=0), val.reshape(-1, config.num_models, config.num_classes)
 
+def wasserstein_2_distance(x, y):
+    assert x.shape == y.shape
+    cost_matrix = jnp.sum((x[:, None, :] - y[None, :, :])**2, axis=-1)
+    cost_matrix = cost_matrix[None, ...]
+    idx = hungarian_cover_tpu_matcher(cost_matrix)
+    idx = idx[0]
+    return (cost_matrix[idx[0], idx[1]].sum() / x.shape[0])**0.5
 
 def launch(config, print_fn):
+    config.num_models = len(config.swag_ckpt_dir) * config.num_target_samples
     # ------------------------------------------------------------------------
     # load teacher for distillation
     # ------------------------------------------------------------------------
@@ -229,7 +241,7 @@ def launch(config, print_fn):
     # ------------------------------------------------------------------------
     dataloaders = build_dataloaders(config)
     config.num_classes = dataloaders["num_classes"]
-    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"]
+    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"] * config.num_target_samples * len(config.swag_ckpt_dir)
 
     # ------------------------------------------------------------------------
     # define and load resnet
@@ -313,7 +325,7 @@ def launch(config, print_fn):
         raise NotImplementedError
     
     partition_optimizers = {
-        "resnet": optax.set_to_zero(), #base_optim(),
+        "resnet": base_optim(), # optax.set_to_zero(),
         "score": base_optim(),
     }
     def tagging(path, v):
@@ -471,12 +483,12 @@ def launch(config, print_fn):
             logitsA.append(logits0)
         logitsB = logitsA[0]
 
-        _logitsA = jnp.stack(logitsA)
-        logprobs = jax.nn.log_softmax(_logitsA, axis=-1)
-        ens_logprobs = jax.scipy.special.logsumexp(
-            logprobs, axis=0) - np.log(logprobs.shape[0])
-        ens_logits = ens_logprobs - ens_logprobs.mean(-1, keepdims=True)
-        logitsA = [ens_logits]
+        # _logitsA = jnp.stack(logitsA)
+        # logprobs = jax.nn.log_softmax(_logitsA, axis=-1)
+        # ens_logprobs = jax.scipy.special.logsumexp(
+        #     logprobs, axis=0) - np.log(logprobs.shape[0])
+        # ens_logits = ens_logprobs - ens_logprobs.mean(-1, keepdims=True)
+        # logitsA = [ens_logits]
 
         batch["logitsB"] = logitsB
         batch["logitsA"] = logitsA
@@ -507,11 +519,7 @@ def launch(config, print_fn):
     # define train step
     # ------------------------------------------------------------------------
 
-    def loss_func(params, state, batch, train=True):
-        logitsA = batch["logitsA"]
-        logitsA = [l for l in batch["logitsA"]]  # length fat list
-        _logitsA = jnp.concatenate(
-            logitsA, axis=-1)  # (B, fat*num_classes)
+    def loss_func(params, state, batch, logitsA, train=True):
         drop_rng, score_rng = jax.random.split(state.rng)
         params_dict = pdict(
             params=params,
@@ -521,7 +529,7 @@ def launch(config, print_fn):
         mutable = ["batch_stats"]
         output = state.apply_fn(
             params_dict, score_rng,
-            _logitsA, batch["images"],
+            logitsA, batch["images"],
             training=train,
             rngs=rngs_dict,
             **(dict(mutable=mutable) if train else dict()),
@@ -554,27 +562,27 @@ def launch(config, print_fn):
 
     @ partial(jax.pmap, axis_name="batch")
     def step_train(state, batch):
+        for logitsA in batch["logitsA"]:
+            def loss_fn(params):
+                _loss_func = get_loss_func()
+                return _loss_func(params, state, batch, logitsA)
+            
+            (loss, (metrics, new_model_state)), grads = jax.value_and_grad(
+                loss_fn, has_aux=True)(state.params)
+            grads = jax.lax.pmean(grads, axis_name="batch")
 
-        def loss_fn(params):
-            _loss_func = get_loss_func()
-            return _loss_func(params, state, batch)
-
-        (loss, (metrics, new_model_state)), grads = jax.value_and_grad(
-            loss_fn, has_aux=True)(state.params)
-        grads = jax.lax.pmean(grads, axis_name="batch")
-
-        new_state = state.apply_gradients(
-            grads=grads, batch_stats=new_model_state.get("batch_stats"))
-        a = config.ema_decay
-        def update_ema(wt, ema_tm1): return jnp.where(
-            (wt != ema_tm1) & (a < 1), (1-a)*wt + a*ema_tm1, wt)
-        new_state = new_state.replace(
-            ema_params=jax.tree_util.tree_map(
-                update_ema,
-                new_state.params,
-                new_state.ema_params))
-        metrics = jax.lax.psum(metrics, axis_name="batch")
-        return new_state, metrics
+            state = state.apply_gradients(
+                grads=grads, batch_stats=new_model_state.get("batch_stats"))
+            a = config.ema_decay
+            def update_ema(wt, ema_tm1): return jnp.where(
+                (wt != ema_tm1) & (a < 1), (1-a)*wt + a*ema_tm1, wt)
+            state = state.replace(
+                ema_params=jax.tree_util.tree_map(
+                    update_ema,
+                    state.params,
+                    state.ema_params))
+            metrics = jax.lax.psum(metrics, axis_name="batch")
+        return state, metrics
 
     # ------------------------------------------------------------------------
     # define sampling step
@@ -585,15 +593,15 @@ def launch(config, print_fn):
         cum_acc_list = []
         cum_nll_list = []
         prob_sum = 0
-        for i, lg in enumerate(logits):
-            logprob = jax.nn.log_softmax(lg, axis=-1)
-            prob = jnp.exp(logprob)
+        for i, prob in enumerate(logits):
+            # logprob = jax.nn.log_softmax(lg, axis=-1)
+            # prob = jnp.exp(logprob)
             prob_sum += prob
             if i != 0:  # Not B
                 acc = evaluate_acc(
-                    logprob, labels, log_input=True, reduction="none")
+                    prob, labels, log_input=False, reduction="none")
                 nll = evaluate_nll(
-                    logprob, labels, log_input=True, reduction='none')
+                    prob, labels, log_input=False, reduction='none')
                 acc = reduce_sum(acc, marker)
                 nll = reduce_sum(nll, marker)
                 acc_list.append(acc)
@@ -609,7 +617,7 @@ def launch(config, print_fn):
                 cum_nll_list.append(nll)
         return acc_list, nll_list, cum_acc_list, cum_nll_list
 
-    def sample_func(state, batch, steps=(config.T+1)//2):
+    def sample_func(state, batch, steps):
         labels = batch["labels"]
         drop_rng, score_rng = jax.random.split(state.rng)
 
@@ -621,7 +629,7 @@ def launch(config, print_fn):
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
             fm_sample, config=config, steps=steps)
-        logitsC, _ = model_bd.sample(
+        logitsC, _, _ = model_bd.sample(
             score_rng, _fm_sample, batch["images"])
         logitsC = rearrange(logitsC, "n (t b) z -> t n b z", t=steps+1)
         logitsB = logitsC[0][0]
@@ -641,7 +649,22 @@ def launch(config, print_fn):
             metrics[f"ens_acc{i}"] = ensacc
             metrics[f"ens_nll{i}"] = ensnll
         return metrics
-    
+
+    def _sample_func(state, batch, steps):
+        drop_rng, score_rng = jax.random.split(state.rng)
+
+        params_dict = pdict(
+            params=state.ema_params,
+            image_stats=config.image_stats,
+            batch_stats=state.batch_stats)
+        rngs_dict = dict(dropout=drop_rng)
+        model_bd = dbn.bind(params_dict, rngs=rngs_dict)
+        _fm_sample = partial(
+            fm_sample, config=config, steps=steps)
+        _, _, val = model_bd.sample(
+            score_rng, _fm_sample, batch["images"])
+        return val
+
     # def sample_func(state, batch, steps=(config.T+1)//2):
     #     labels = batch["labels"]
     #     logitsA = batch["logitsA"]
@@ -669,6 +692,20 @@ def launch(config, print_fn):
         metrics = sample_func(state, batch, steps=steps)
         metrics = jax.lax.psum(metrics, axis_name="batch")
         return metrics
+    
+    @partial(jax.pmap, axis_name="batch")
+    def step_measure_distance(state, batch):
+        steps = config.T
+        ens_logits = jnp.stack(batch["logitsA"], axis=0).transpose(1, 0, 2)
+        pred_logits = _sample_func(state, batch, steps=steps)
+        assert len(ens_logits) == len(pred_logits)
+        
+        w2_dist = 0
+        for ens, pred in zip(ens_logits, pred_logits):
+            w2_dist += wasserstein_2_distance(ens, pred)
+        w2_dist /= len(pred_logits)
+        w2_dist = jax.lax.pmean(w2_dist, axis_name="batch")
+        return w2_dist
 
     # ------------------------------------------------------------------------
     # define mixup
@@ -805,6 +842,10 @@ def launch(config, print_fn):
         valid_summarized = summarize_metrics(valid_metrics, "val")
         valid_summary.update(valid_summarized)
         wl.log(valid_summary)
+        
+        batch = step_label(state, batch)
+        w2_dist = step_measure_distance(state, batch)
+        wl.log({"val/w2_dist": w2_dist})
 
         # ------------------------------------------------------------------------
         # test by getting features from each resnet
