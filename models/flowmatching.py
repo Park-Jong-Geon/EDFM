@@ -285,7 +285,7 @@ class FlowMatching(nn.Module):
     def forward(self, rng, l_label, c):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
-        t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-1/self.steps)  # (B,)
+        t = jax.random.uniform(t_rng, (l_label.shape[0],))  # (B,)
 
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
