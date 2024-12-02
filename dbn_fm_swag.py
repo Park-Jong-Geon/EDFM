@@ -697,7 +697,9 @@ def launch(config, print_fn):
     def step_measure_distance(state, batch):
         steps = config.T
         ens_logits = jnp.stack(batch["logitsA"], axis=0).transpose(1, 0, 2)
+        ens_logits = ens_logits - ens_logits.mean(-1, keepdims=True)
         pred_logits = _sample_func(state, batch, steps=steps)
+        pred_logits = pred_logits - pred_logits.mean(-1, keepdims=True)
         assert len(ens_logits) == len(pred_logits)
         
         w2_dist = 0
@@ -845,7 +847,7 @@ def launch(config, print_fn):
         
         batch = step_label(state, batch)
         w2_dist = step_measure_distance(state, batch)
-        wl.log({"val/w2_dist": w2_dist})
+        wl.log({"val/w2_dist": w2_dist[0]})
 
         # ------------------------------------------------------------------------
         # test by getting features from each resnet
