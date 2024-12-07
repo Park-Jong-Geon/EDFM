@@ -242,6 +242,7 @@ class FlaxResNet(nn.Module):
     num_blocks: Tuple[int] = None
     first_conv: Tuple[int] = None
     first_pool: Tuple[int] = None
+    return_emb: bool = False
 
     @nn.compact
     def __call__(self, x, **kwargs):
@@ -362,7 +363,7 @@ class FlaxResNet(nn.Module):
                 else:
                     self.sow('intermediates',
                              f'feature.layer{layer_idx + 1}stride{_stride_idx}', y)
-
+        z = y
         y = jnp.mean(y, axis=(1, 2))
         self.sow('intermediates', 'feature.vector', y)
 
@@ -371,7 +372,10 @@ class FlaxResNet(nn.Module):
             y = self.fc(features=self.num_classes, dtype=self.dtype)(y)
             self.sow('intermediates', 'cls.logit', y)
 
-        return y
+        if self.return_emb:
+            return z, y
+        else:
+            return y
 
 
 class FlaxResNetBase(nn.Module):

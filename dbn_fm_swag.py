@@ -29,7 +29,7 @@ from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
 from models.resnet import FlaxResNet, FlaxResNetBase
 from models.i2sb import ClsUnet
-from models.flowmatching import MlpBridge, FlowMatching
+from models.flowmatching import MlpBridge, ClsUnet, FlowMatching
 from collections import OrderedDict
 from tqdm import tqdm
 from utils import WandbLogger
@@ -54,7 +54,7 @@ class TrainState(train_state.TrainState):
     batch_stats: Any = None
 
 
-def get_resnet(config, head=False):
+def get_resnet(config, head=False, return_emb=False):
     if config.model_name == 'FlaxResNet':
         _ResNet = partial(
             FlaxResNet if head else FlaxResNetBase,
@@ -69,7 +69,8 @@ def get_resnet(config, head=False):
                 int(b) for b in config.model_blocks.split(",")
             ) if config.model_blocks is not None else None,
             first_conv=config.first_conv,
-            first_pool=config.first_pool
+            first_pool=config.first_pool,
+            return_emb=return_emb,
         )
 
     if config.model_style == 'BN-ReLU':
@@ -138,17 +139,25 @@ def pdict(params, batch_stats=None, image_stats=None):
     return params_dict
 
 
+# def get_scorenet(config):
+#     score_func = partial(
+#         MlpBridge,
+#         emb_dim=config.emb_dim,
+#         num_blocks=config.num_blocks,
+#         fourier_scale=config.fourier_scale,
+#     )
+#     return score_func
 def get_scorenet(config):
     score_func = partial(
-        MlpBridge,
-        emb_dim=config.emb_dim,
-        num_blocks=config.num_blocks,
-        fourier_scale=config.fourier_scale,
+        ClsUnet,        
+        num_classes = config.num_classes,
+        ch = config.ch,
+        droprate = config.droprate,
     )
     return score_func
 
 def build_dbn(config):
-    resnet = get_resnet(config, head=True)
+    resnet = get_resnet(config, head=True, return_emb=True)
     score_net = get_scorenet(config)
     dbn = FlowMatching(
         res_net=resnet,
@@ -329,7 +338,7 @@ def launch(config, print_fn):
         raise NotImplementedError
     
     partition_optimizers = {
-        "resnet": base_optim(), # optax.set_to_zero(),
+        "resnet": base_optim(), #optax.set_to_zero(),
         "score": base_optim(),
     }
     def tagging(path, v):
@@ -850,8 +859,8 @@ def launch(config, print_fn):
         wl.log(valid_summary)
         
         batch = step_label(state, batch)
-        w2_dist = step_measure_distance(state, batch)
-        wl.log({"val/w2_dist": w2_dist[0]})
+        # w2_dist = step_measure_distance(state, batch)
+        # wl.log({"val/w2_dist": w2_dist[0]})
 
         # ------------------------------------------------------------------------
         # test by getting features from each resnet
