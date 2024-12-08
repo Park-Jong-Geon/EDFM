@@ -15,12 +15,12 @@ droprate: 0.
 
 optim_bs: 128
 optim_ne: 2000 #800
-optim_lr: 0.001 #0.00025
+optim_lr: 0.00025
 optim_weight_decay: 0
 ema_decay: 0.
 
 T: 5
-var: 5 #125
+var: 5
 
 mixup_alpha: 0.4
 
