@@ -170,7 +170,6 @@ def build_dbn(config):
     return dbn
 
 def fm_sample(score, l0, x, config, steps):
-    num_models = 30
     batch_size = l0.shape[0]
     timesteps = jnp.linspace(0., 1., steps+1)
 
@@ -185,13 +184,13 @@ def fm_sample(score, l0, x, config, steps):
         eps = score(l_n, x, t=current_t)
         return l_n + batch_mul(next_t-current_t, eps)
 
-    x_list = [jax.nn.softmax(l0).reshape(-1, num_models, config.num_classes).mean(1)]
+    x_list = [jax.nn.softmax(l0).reshape(-1, config.num_models, config.num_classes).mean(1)]
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
-        x_list.append(jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1))
+        x_list.append(jax.nn.softmax(val).reshape(-1, config.num_models, config.num_classes).mean(1))
 
-    return jnp.concatenate(x_list, axis=0), val.reshape(-1, num_models, config.num_classes)
+    return jnp.concatenate(x_list, axis=0), val.reshape(-1, config.num_models, config.num_classes)
 
 def wasserstein_2_distance(x, y):
     assert x.shape == y.shape
@@ -860,8 +859,8 @@ def launch(config, print_fn):
         wl.log(valid_summary)
         
         batch = step_label(state, batch)
-        # w2_dist = step_measure_distance(state, batch)
-        # wl.log({"val/w2_dist": w2_dist[0]})
+        w2_dist = step_measure_distance(state, batch)
+        wl.log({"val/w2_dist": w2_dist[0]})
 
         # ------------------------------------------------------------------------
         # test by getting features from each resnet

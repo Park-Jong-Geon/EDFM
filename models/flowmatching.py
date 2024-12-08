@@ -476,8 +476,7 @@ class FlowMatching(nn.Module):
 
     def conditional_sample(self, rng, sampler, x):
         z, _ = self.resnet(x, training=False)
-        # z = z.repeat(self.num_models, axis=0)
-        z = z.repeat(30, axis=0)
+        z = z.repeat(self.num_models, axis=0)
         lB = self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
         lC, val = sampler(
             functools.partial(self.score, training=False), lB, z)
