@@ -477,8 +477,7 @@ class FlowMatching(nn.Module):
         z, c = self.resnet(x, training=False)
         z = z.repeat(num_models, axis=0)
         c = c.repeat(num_models, axis=0)
-        lB = c + self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
-        lC, val = sampler(
-            functools.partial(self.score, training=False), lB, z, c)
-        lC = lC[None, ...]
-        return lC, lB, val
+        init_logit = c + self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
+        logit, val = sampler(
+            functools.partial(self.score, training=False), init_logit, z, c)
+        return logit, val

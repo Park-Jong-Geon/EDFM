@@ -183,13 +183,13 @@ def fm_sample(score, l0, z, c, config, steps, num_models):
         eps = score(l_n, z, t=current_t)
         return l_n + batch_mul(next_t-current_t, eps)
 
-    x_list = [jax.nn.softmax(l0).reshape(-1, num_models, config.num_classes).mean(1)]
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
-        x_list.append(jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1))
-
-    return jnp.concatenate(x_list, axis=0), val.reshape(-1, num_models, config.num_classes)
+        
+    prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
+    logits = val.reshape(-1, num_models, config.num_classes)
+    return prob, logits
 
 def wasserstein_2_distance(x, y):
     assert x.shape == y.shape
@@ -592,35 +592,15 @@ def launch(config, print_fn):
     # ------------------------------------------------------------------------
     # define sampling step
     # ------------------------------------------------------------------------
-    def ensemble_accnll(logits, labels, marker):
-        acc_list = []
-        nll_list = []
-        cum_acc_list = []
-        cum_nll_list = []
-        prob_sum = 0
-        for i, prob in enumerate(logits):
-            # logprob = jax.nn.log_softmax(lg, axis=-1)
-            # prob = jnp.exp(logprob)
-            prob_sum += prob
-            if i != 0:  # Not B
-                acc = evaluate_acc(
-                    prob, labels, log_input=False, reduction="none")
-                nll = evaluate_nll(
-                    prob, labels, log_input=False, reduction='none')
-                acc = reduce_sum(acc, marker)
-                nll = reduce_sum(nll, marker)
-                acc_list.append(acc)
-                nll_list.append(nll)
-                avg_prob = prob_sum / (i+1)
-                acc = evaluate_acc(
-                    avg_prob, labels, log_input=False, reduction="none")
-                nll = evaluate_nll(
-                    avg_prob, labels, log_input=False, reduction='none')
-                acc = reduce_sum(acc, marker)
-                nll = reduce_sum(nll, marker)
-                cum_acc_list.append(acc)
-                cum_nll_list.append(nll)
-        return acc_list, nll_list, cum_acc_list, cum_nll_list
+    def evaluate_accnll(prob, labels, marker):
+        acc = evaluate_acc(
+            prob, labels, log_input=False, reduction="none")
+        nll = evaluate_nll(
+            prob, labels, log_input=False, reduction='none')
+        acc = reduce_sum(acc, marker)
+        nll = reduce_sum(nll, marker)
+        
+        return acc, nll
 
     def sample_func(state, batch, steps):
         labels = batch["labels"]
@@ -632,27 +612,28 @@ def launch(config, print_fn):
             batch_stats=state.batch_stats)
         rngs_dict = dict(dropout=drop_rng)
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
+        
+        # Ensemble
         _fm_sample = partial(
             fm_sample, config=config, steps=steps, num_models=config.num_ensembles)
-        logitsC, _, _ = model_bd.sample(
+        prob_ens, _ = model_bd.sample(
             score_rng, _fm_sample, batch["images"], config.num_ensembles)
-        logitsC = rearrange(logitsC, "n (t b) z -> t n b z", t=steps+1)
-        logitsB = logitsC[0][0]
-        logitsC = logitsC[-1][0]
+        
+        # Single model
+        _fm_sample = partial(
+            fm_sample, config=config, steps=steps, num_models=1)
+        prob_1, _ = model_bd.sample(
+            score_rng, _fm_sample, batch["images"], 1)
 
-        (
-            acc_list, nll_list, cum_acc_list, cum_nll_list
-        ) = ensemble_accnll([logitsB, logitsC], labels, batch["marker"])
+        acc_ens, nll_ens = evaluate_accnll(prob_ens, labels, batch["marker"])
+        acc_1, nll_1 = evaluate_accnll(prob_1, labels, batch["marker"])
         metrics = OrderedDict({
             "count": jnp.sum(batch["marker"]),
         })
-
-        for i, (acc, nll, ensacc, ensnll) in enumerate(
-                zip(acc_list, nll_list, cum_acc_list, cum_nll_list), start=1):
-            metrics[f"acc{i}"] = acc
-            metrics[f"nll{i}"] = nll
-            metrics[f"ens_acc{i}"] = ensacc
-            metrics[f"ens_nll{i}"] = ensnll
+        metrics[f"acc_ens"] = acc_ens
+        metrics[f"nll_ens"] = nll_ens
+        metrics[f"acc_1"] = acc_1
+        metrics[f"nll_1"] = nll_1
         return metrics
 
     def _sample_func(state, batch, steps):
@@ -666,7 +647,7 @@ def launch(config, print_fn):
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
             fm_sample, config=config, steps=steps, num_models=config.num_models)
-        _, _, val = model_bd.sample(
+        _, val = model_bd.sample(
             score_rng, _fm_sample, batch["images"], config.num_models)
         return val
 
@@ -776,8 +757,6 @@ def launch(config, print_fn):
     )
     wandb.define_metric("val/loss", summary="min")
     wandb.define_metric("val/acc", summary="max")
-    wandb.define_metric("val/ens_acc", summary="max")
-    wandb.define_metric("val/ens_nll", summary="min")
     wandb.run.summary["params_resnet"] = (
         sum(x.size for x in jax.tree_util.tree_leaves(
             variables["params"]["resnet"]))
@@ -809,14 +788,10 @@ def launch(config, print_fn):
             assert summarized.get(f"tst/acc{config.T+1}_inter") is None
             acc_str = ",".join(
                 [f"ACC({config.T+1-i})   {summarized[f'{key}/acc{i}_inter']:.4f}" for i in range(1, config.T+1)])
-            ens_acc_str = ",".join(
-                [f"ENS({config.T+1}to{config.T+1-i}){summarized[f'{key}/ens_acc{i}_inter']:.4f}" for i in range(1, config.T+1)])
             print(acc_str, flush=True)
-            print(ens_acc_str, flush=True)
         if inter_samples:
             for i in range(1, config.T+1):
                 del summarized[f"{key}/acc{i}_inter"]
-                del summarized[f"{key}/ens_acc{i}_inter"]
 
         del summarized[f"{key}/count"]
         return summarized
@@ -878,8 +853,8 @@ def launch(config, print_fn):
         # ------------------------------------------------------------------------
         # test by getting features from each resnet
         # ------------------------------------------------------------------------
-        acc_criteria = valid_summarized[f"val/acc1"]
-        nll_criteria = valid_summarized[f"val/nll1"]
+        acc_criteria = valid_summarized[f"val/acc_ens"]
+        nll_criteria = valid_summarized[f"val/nll_ens"]
         if (best_acc < acc_criteria) or (best_nll > nll_criteria):
             if valid_only_cond:
                 best_acc = acc_criteria
