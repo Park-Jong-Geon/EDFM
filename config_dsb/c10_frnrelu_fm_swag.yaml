@@ -24,7 +24,9 @@ var: 5
 
 mixup_alpha: 0.4
 
-num_target_samples: 3
+num_steps_per_sample: 1
+num_ensembles: 30
+num_models: 100
 swag_ckpt_dir:
   ['checkpoints/sgd_swag/c10_new/sgd_swag_2/checkpoint_1000',
   'checkpoints/sgd_swag/c10_new/sgd_swag_5/checkpoint_1000',

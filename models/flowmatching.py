@@ -438,7 +438,6 @@ class FlowMatching(nn.Module):
     steps: float = 100.
     var: float = 0.2
     num_classes: int = 10
-    num_models: int = 30
     eps: float = 0.05
 
     def setup(self):
@@ -449,13 +448,13 @@ class FlowMatching(nn.Module):
         return self.conditional_dbn(*args, **kwargs)
 
     def conditional_dbn(self, rng, l0, x, **kwargs):
-        z, _ = self.resnet(x, **kwargs)        
-        l_t, t, next_l_t = self.forward(rng, l0)
+        z, c = self.resnet(x, **kwargs)        
+        l_t, t, next_l_t = self.forward(rng, l0, c)
         # next_l_t = jax.nn.softmax(next_l_t)
         eps = self.score(l_t, z, t, **kwargs)
         return eps, next_l_t
 
-    def forward(self, rng, l_label):
+    def forward(self, rng, l_label, c):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
         t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-self.eps)  # (B,)
@@ -463,7 +462,7 @@ class FlowMatching(nn.Module):
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
         _t = t[:, None]
-        x_t = _t * l_label + (1-_t) * self.var * z
+        x_t = c + _t * l_label + (1-_t) * self.var * z
 
         # Compute diff
         u_t = (l_label - x_t) / (1-_t)
@@ -474,11 +473,12 @@ class FlowMatching(nn.Module):
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
 
-    def conditional_sample(self, rng, sampler, x):
-        z, _ = self.resnet(x, training=False)
-        z = z.repeat(self.num_models, axis=0)
-        lB = self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
+    def conditional_sample(self, rng, sampler, x, num_models):
+        z, c = self.resnet(x, training=False)
+        z = z.repeat(num_models, axis=0)
+        c = c.repeat(num_models, axis=0)
+        lB = c + self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
         lC, val = sampler(
-            functools.partial(self.score, training=False), lB, z)
+            functools.partial(self.score, training=False), lB, z, c)
         lC = lC[None, ...]
         return lC, lB, val

@@ -165,11 +165,10 @@ def build_dbn(config):
         steps=config.T,
         var=config.var,
         num_classes=config.num_classes,
-        num_models=config.num_models,
     )
     return dbn
 
-def fm_sample(score, l0, x, config, steps):
+def fm_sample(score, l0, z, c, config, steps, num_models):
     batch_size = l0.shape[0]
     timesteps = jnp.linspace(0., 1., steps+1)
 
@@ -181,16 +180,16 @@ def fm_sample(score, l0, x, config, steps):
         next_t = jnp.array([timesteps[n+1]])
         next_t = jnp.tile(next_t, [batch_size])
 
-        eps = score(l_n, x, t=current_t)
+        eps = score(l_n, z, t=current_t)
         return l_n + batch_mul(next_t-current_t, eps)
 
-    x_list = [jax.nn.softmax(l0).reshape(-1, config.num_models, config.num_classes).mean(1)]
+    x_list = [jax.nn.softmax(l0).reshape(-1, num_models, config.num_classes).mean(1)]
     val = l0
     for i in range(0, steps):
         val = body_fn(i, val)
-        x_list.append(jax.nn.softmax(val).reshape(-1, config.num_models, config.num_classes).mean(1))
+        x_list.append(jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1))
 
-    return jnp.concatenate(x_list, axis=0), val.reshape(-1, config.num_models, config.num_classes)
+    return jnp.concatenate(x_list, axis=0), val.reshape(-1, num_models, config.num_classes)
 
 def wasserstein_2_distance(x, y):
     assert x.shape == y.shape
@@ -201,7 +200,6 @@ def wasserstein_2_distance(x, y):
     return (cost_matrix[idx[0], idx[1]].sum() / x.shape[0])**0.5
 
 def launch(config, print_fn):
-    config.num_models = len(config.swag_ckpt_dir) * config.num_target_samples
     # ------------------------------------------------------------------------
     # load teacher for distillation
     # ------------------------------------------------------------------------
@@ -254,7 +252,7 @@ def launch(config, print_fn):
     # ------------------------------------------------------------------------
     dataloaders = build_dataloaders(config)
     config.num_classes = dataloaders["num_classes"]
-    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"] * config.num_target_samples * len(config.swag_ckpt_dir)
+    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"] * config.num_steps_per_sample
 
     # ------------------------------------------------------------------------
     # define and load resnet
@@ -338,7 +336,7 @@ def launch(config, print_fn):
         raise NotImplementedError
     
     partition_optimizers = {
-        "resnet": base_optim(), #optax.set_to_zero(),
+        "resnet": base_optim(), #optax.set_to_zero(), 
         "score": base_optim(),
     }
     def tagging(path, v):
@@ -469,9 +467,10 @@ def launch(config, print_fn):
     @partial(jax.pmap, axis_name="batch")
     def step_label(state, batch):
         rng = state.rng
-        swag_param_list = []
-        for swag_state in swag_state_list:
-            swag_params_per_seed = sample_swag_diag(config.num_target_samples, rng, swag_state)
+        swag_param_list = []        
+        for _ in range(config.num_steps_per_sample):
+            swag_state = random.choice(swag_state_list)
+            swag_params_per_seed = sample_swag_diag(1, rng, swag_state)
             swag_param_list += swag_params_per_seed
             rng, _ = jax.random.split(rng)
             
@@ -495,13 +494,6 @@ def launch(config, print_fn):
             logits0 = logits0 - logits0.mean(-1, keepdims=True)
             logitsA.append(logits0)
         logitsB = logitsA[0]
-
-        # _logitsA = jnp.stack(logitsA)
-        # logprobs = jax.nn.log_softmax(_logitsA, axis=-1)
-        # ens_logprobs = jax.scipy.special.logsumexp(
-        #     logprobs, axis=0) - np.log(logprobs.shape[0])
-        # ens_logits = ens_logprobs - ens_logprobs.mean(-1, keepdims=True)
-        # logitsA = [ens_logits]
 
         batch["logitsB"] = logitsB
         batch["logitsA"] = logitsA
@@ -641,9 +633,9 @@ def launch(config, print_fn):
         rngs_dict = dict(dropout=drop_rng)
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
-            fm_sample, config=config, steps=steps)
+            fm_sample, config=config, steps=steps, num_models=config.num_ensembles)
         logitsC, _, _ = model_bd.sample(
-            score_rng, _fm_sample, batch["images"])
+            score_rng, _fm_sample, batch["images"], config.num_ensembles)
         logitsC = rearrange(logitsC, "n (t b) z -> t n b z", t=steps+1)
         logitsB = logitsC[0][0]
         logitsC = logitsC[-1][0]
@@ -673,31 +665,10 @@ def launch(config, print_fn):
         rngs_dict = dict(dropout=drop_rng)
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
-            fm_sample, config=config, steps=steps)
+            fm_sample, config=config, steps=steps, num_models=config.num_models)
         _, _, val = model_bd.sample(
-            score_rng, _fm_sample, batch["images"])
+            score_rng, _fm_sample, batch["images"], config.num_models)
         return val
-
-    # def sample_func(state, batch, steps=(config.T+1)//2):
-    #     labels = batch["labels"]
-    #     logitsA = batch["logitsA"]
-    #     logitsA = [l for l in batch["logitsA"]]  # length fat list
-    #     _logitsA = jnp.concatenate(
-    #         logitsA, axis=-1)  # (B, fat*num_classes)
-    #     (
-    #         acc_list, nll_list, cum_acc_list, cum_nll_list
-    #     ) = ensemble_accnll([_logitsA, _logitsA], labels, batch["marker"])
-    #     metrics = OrderedDict({
-    #         "count": jnp.sum(batch["marker"]),
-    #     })
-
-    #     for i, (acc, nll, ensacc, ensnll) in enumerate(
-    #             zip(acc_list, nll_list, cum_acc_list, cum_nll_list), start=1):
-    #         metrics[f"acc{i}"] = acc
-    #         metrics[f"nll{i}"] = nll
-    #         metrics[f"ens_acc{i}"] = ensacc
-    #         metrics[f"ens_nll{i}"] = ensnll
-    #     return metrics
 
     @partial(jax.pmap, axis_name="batch")
     def step_sample(state, batch):
@@ -708,19 +679,60 @@ def launch(config, print_fn):
     
     @partial(jax.pmap, axis_name="batch")
     def step_measure_distance(state, batch):
+        rng = state.rng
+        swag_param_list = []
+        swag_state = random.choice(swag_state_list)
+        
+        for _ in range(config.num_models):
+            swag_state = random.choice(swag_state_list)
+            swag_params_per_seed = sample_swag_diag(1, rng, swag_state)
+            swag_param_list += swag_params_per_seed
+            rng, _ = jax.random.split(rng)
+            
+        logitsA = []
+        for swag_param in swag_param_list:
+            res_params_dict = dict(params=swag_param)
+            if image_stats is not None:
+                res_params_dict["image_stats"] = image_stats
+            if batch_stats is not None:
+                # Update batch_stats
+                trn_loader = dataloaders['dataloader'](rng=state.rng)
+                trn_loader = jax_utils.prefetch_to_device(trn_loader, size=2)
+                iter_batch_stats = initial_batch_stats
+                for _, batch in enumerate(trn_loader, start=1):
+                    iter_batch_stats = update_swag_batch_stats(resnet, res_params_dict, batch, iter_batch_stats)
+                res_params_dict["batch_stats"] = cross_replica_mean(iter_batch_stats)
+            
+            images = batch["images"]
+            logits0 = forward_resnet(res_params_dict, images)
+            # logits0: (B, d)
+            logits0 = logits0 - logits0.mean(-1, keepdims=True)
+            logitsA.append(logits0)
+            
         steps = config.T
-        ens_logits = jnp.stack(batch["logitsA"], axis=0).transpose(1, 0, 2)
+        ens_logits = jnp.stack(logitsA, axis=0).transpose(1, 0, 2)
         ens_logits = ens_logits - ens_logits.mean(-1, keepdims=True)
         pred_logits = _sample_func(state, batch, steps=steps)
         pred_logits = pred_logits - pred_logits.mean(-1, keepdims=True)
         assert len(ens_logits) == len(pred_logits)
         
         w2_dist = 0
+        ens_var = 0
+        pred_var = 0
         for ens, pred in zip(ens_logits, pred_logits):
             w2_dist += wasserstein_2_distance(ens, pred)
+            ens_cov = jnp.cov(ens, rowvar=False)
+            pred_cov = jnp.cov(pred, rowvar=False)
+            ens_var += jnp.trace(jnp.abs(ens_cov))
+            pred_var += jnp.trace(jnp.abs(pred_cov))
         w2_dist /= len(pred_logits)
         w2_dist = jax.lax.pmean(w2_dist, axis_name="batch")
-        return w2_dist
+        ens_var /= len(pred_logits)
+        ens_var = jax.lax.pmean(ens_var, axis_name="batch")
+        pred_var /= len(pred_logits)
+        pred_var = jax.lax.pmean(pred_var, axis_name="batch")
+        
+        return w2_dist, ens_var, pred_var
 
     # ------------------------------------------------------------------------
     # define mixup
@@ -858,9 +870,10 @@ def launch(config, print_fn):
         valid_summary.update(valid_summarized)
         wl.log(valid_summary)
         
-        batch = step_label(state, batch)
-        w2_dist = step_measure_distance(state, batch)
+        w2_dist, ens_var, pred_var = step_measure_distance(state, batch)
         wl.log({"val/w2_dist": w2_dist[0]})
+        wl.log({"val/ens_var": ens_var[0]})
+        wl.log({"val/pred_var": pred_var[0]})
 
         # ------------------------------------------------------------------------
         # test by getting features from each resnet
