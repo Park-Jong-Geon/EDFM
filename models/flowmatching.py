@@ -438,7 +438,8 @@ class FlowMatching(nn.Module):
     steps: float = 100.
     var: float = 0.2
     num_classes: int = 10
-    eps: float = 0.05
+    eps: float = 1e-4
+    alpha: float = 1.2
 
     def setup(self):
         self.resnet = self.res_net()
@@ -458,6 +459,8 @@ class FlowMatching(nn.Module):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
         t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-self.eps)  # (B,)
+        # u = jax.random.uniform(t_rng, (l_label.shape[0],),)
+        # t = jnp.log(1 + (self.alpha**(1-self.eps) - 1) * u) / jnp.log(self.alpha)
 
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
