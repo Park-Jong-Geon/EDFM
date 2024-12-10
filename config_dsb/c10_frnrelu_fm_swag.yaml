@@ -11,11 +11,11 @@ model_name: FlaxResNet
 # ClsUnet
 num_classes: 10
 ch: 64
-droprate: 0.
+droprate: 0.3
 
 optim_bs: 128
-optim_ne: 2000 #800
-optim_lr: 0.00025
+optim_ne: 1000
+optim_lr: 0.00005
 optim_weight_decay: 0
 ema_decay: 0.
 
