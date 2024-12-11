@@ -172,9 +172,9 @@ def build_dbn(config):
 
 def fm_sample(score, l0, z, c, config, steps, num_models):
     batch_size = l0.shape[0]
-    timesteps = jnp.linspace(0., 1., steps+1)
-    # a = config.sample_timestep_alpha
-    # timesteps = jnp.array([(1-a**i)/(1-a**steps) for i in range(steps+1)])
+    # timesteps = jnp.linspace(0., 1., steps+1)
+    a = config.sample_timestep_alpha
+    timesteps = jnp.array([(1-a**i)/(1-a**steps) for i in range(steps+1)])
 
     @jax.jit
     def body_fn(n, l_n):
@@ -186,12 +186,12 @@ def fm_sample(score, l0, z, c, config, steps, num_models):
 
         eps = score(l_n, z, t=current_t)
         euler_l_n = l_n + batch_mul(next_t-current_t, eps)
-        return euler_l_n
+        # return euler_l_n
         
-        # eps2 = score(euler_l_n, z, t=next_t)
-        # heun_l_n = l_n + batch_mul((next_t-current_t)/2, eps+eps2)
+        eps2 = score(euler_l_n, z, t=next_t)
+        heun_l_n = l_n + batch_mul((next_t-current_t)/2, eps+eps2)
         
-        # return heun_l_n
+        return heun_l_n
 
     val = l0
     for i in range(0, steps):
