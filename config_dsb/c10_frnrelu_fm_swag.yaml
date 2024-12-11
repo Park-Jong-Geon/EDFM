@@ -19,10 +19,10 @@ optim_lr: 0.00005
 optim_weight_decay: 0
 ema_decay: 0.999
 
-T: 10
+T: 5
 var: 5
 
-train_timestep_truncation: 0.05
+train_timestep_truncation: 0.001
 train_timestep_alpha: 1.2
 sample_timestep_alpha: 0.5
 
