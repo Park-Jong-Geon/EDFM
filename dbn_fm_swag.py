@@ -207,7 +207,7 @@ def wasserstein_2_distance(x, y):
     cost_matrix = cost_matrix[None, ...]
     idx = hungarian_cover_tpu_matcher(cost_matrix)
     idx = idx[0]
-    return (cost_matrix[idx[0], idx[1]].sum() / x.shape[0])**0.5
+    return (cost_matrix[0][idx[0], idx[1]].sum() / x.shape[0])**0.5
 
 def launch(config, print_fn):
     # ------------------------------------------------------------------------
