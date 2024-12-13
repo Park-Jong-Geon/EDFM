@@ -23,7 +23,7 @@ T: 10
 var: 4
 
 train_timestep_truncation: 0.001
-train_timestep_alpha: 1.2
+train_timestep_alpha: 3
 sample_timestep_alpha: 0.5
 
 mixup_alpha: 0.4
