@@ -458,14 +458,13 @@ class FlowMatching(nn.Module):
     def forward(self, rng, l_label, c):
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
-        # t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-self.eps)  # (B,)
-        u = jax.random.uniform(t_rng, (l_label.shape[0],),)
-        t = jnp.log(1 + (self.alpha**(1-self.eps) - 1) * u) / jnp.log(self.alpha)
+        t = jax.random.uniform(t_rng, (l_label.shape[0],), maxval=1-self.eps)  # (B,)
+        # u = jax.random.uniform(t_rng, (l_label.shape[0],),)
+        # t = jnp.log(1 + (self.alpha**(1-self.eps) - 1) * u) / jnp.log(self.alpha)
 
         # Sample noise
         z = jax.random.normal(n_rng, l_label.shape)
         _t = t[:, None]
-        # x_t = c + _t * l_label + (1-_t) * self.var * z
         x_t = _t * l_label + (1-_t) * self.var * z
 
         # Compute diff
@@ -481,7 +480,6 @@ class FlowMatching(nn.Module):
         z, c = self.resnet(x, training=False)
         z = z.repeat(num_models, axis=0)
         c = c.repeat(num_models, axis=0)
-        # init_logit = c + self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
         init_logit = self.var * jax.random.normal(rng, (z.shape[0], self.num_classes))
         logit, val = sampler(
             functools.partial(self.score, training=False), init_logit, z, c)
