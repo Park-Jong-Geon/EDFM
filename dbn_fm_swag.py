@@ -194,8 +194,16 @@ def fm_sample(score, l0, z, c, config, steps, num_models):
         return heun_l_n
 
     val = l0
-    for i in range(0, steps):
+    for i in range(0, steps-1):
         val = body_fn(i, val)
+    current_t = jnp.array([timesteps[steps-1]])
+    current_t = jnp.tile(current_t, [batch_size])
+
+    next_t = jnp.array([timesteps[steps]])
+    next_t = jnp.tile(next_t, [batch_size])
+
+    eps = score(val, z, t=current_t)
+    val += batch_mul(next_t-current_t, eps)
         
     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
     logits = val.reshape(-1, num_models, config.num_classes)
