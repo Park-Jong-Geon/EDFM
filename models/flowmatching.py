@@ -224,40 +224,56 @@ class GaussianFourierProjection(nn.Module):
     
 
 class MlpBridge(nn.Module):
-    emb_dim: int = 256
     num_blocks: int = 32
+    emb_len: int = 256
+    emb_z_ch: int = 8
+    time_embedding_dim: int = 256
+    tokens_mlp_dim: int = 256
+    channels_mlp_dim: int = 256
     fourier_scale: float = 1.
+    droprate: float = 0.1
     act:          Callable = nn.gelu
-    fc:           nn.Module = functools.partial(nn.Dense, use_bias=True,
-                                      kernel_init=jax.nn.initializers.he_normal(),
-                                      bias_init=jax.nn.initializers.zeros)
+    fc:           nn.Module = functools.partial(nn.Dense,
+                                                kernel_init=nn.initializers.he_normal(),
+                                                bias_init=nn.initializers.zeros)
+    conv:         nn.Module = functools.partial(nn.Conv, use_bias=False,
+                                      kernel_init=nn.initializers.he_normal(),
+                                      bias_init=nn.initializers.zeros)
+    norm:         nn.Module = nn.LayerNorm
     
     @nn.compact
-    def __call__(self, p, c, t, **kwargs):
+    def __call__(self, p, z, t, **kwargs):
         # Probability embedding
-        p_emb = self.fc(self.emb_dim)(p)
+        p_emb = self.fc(self.emb_len)(p)
         p_emb = self.act(p_emb)
-        p_emb = self.fc(self.emb_dim)(p_emb)
-        p_emb = self.act(p_emb)
+        p_emb = self.norm()(p_emb)[..., None]
+        
         
         # Timestep embedding; Gaussian Fourier features embeddings
-        t_emb = GaussianFourierProjection(embedding_size=self.emb_dim, scale=self.fourier_scale)(t)
-        t_emb = self.fc(self.emb_dim)(t_emb)
-        t_emb = self.act(t_emb)
-        t_emb = self.fc(self.emb_dim)(t_emb)
-        t_emb = self.act(t_emb)
+        t_emb = GaussianFourierProjection(embedding_size=self.time_embedding_dim//4, 
+                                          scale=self.fourier_scale)(t)
+        for _ in range(2):
+            t_emb = self.fc(self.time_embedding_dim)(t_emb)
+            t_emb = self.act(t_emb)
+        
         
         # Image features embedding
-        z_emb = self.fc(self.emb_dim)(c)
+        z_emb = self.conv(features=self.emb_z_ch,
+                          kernel_size=(3, 3))(z)
+        z_emb = rearrange(z_emb, 'n h w c -> n (h w) c')
+        z_emb = jnp.swapaxes(z_emb, 1, 2)
+        z_emb = self.fc(self.emb_len)(z_emb)
         z_emb = self.act(z_emb)
-        z_emb = self.fc(self.emb_dim)(z_emb)
-        z_emb = self.act(z_emb)
-
-        emb = jnp.concatenate([z_emb, t_emb], axis=-1)
-        h = MlpMixer(out_dim=p.shape[-1], 
+        z_emb = jnp.swapaxes(z_emb, 1, 2)
+        z_emb = self.norm()(z_emb)
+        
+        
+        emb = jnp.concatenate([p_emb, z_emb], axis=-1)
+        return MlpMixer(num_classes=p.shape[-1], 
                      num_blocks=self.num_blocks, 
-                     mlp_dim=self.emb_dim)(p_emb, emb)
-        return h
+                     tokens_mlp_dim=self.tokens_mlp_dim,
+                     channels_mlp_dim=self.channels_mlp_dim,
+                     droprate=self.droprate)(emb, t_emb, kwargs["training"])
 
 
 def to_norm_kwargs(norm, kwargs):
@@ -363,6 +379,7 @@ class ClsUnet(nn.Module):
         (3, 96, 2, 1),
         (3, 128, 2, 1),
     )
+    new_dim: int = 16
 
     @nn.compact
     def __call__(self, p, x, t, **kwargs):
@@ -376,11 +393,9 @@ class ClsUnet(nn.Module):
         t = self.silu(t)
 
         # Encode p; upsample
-        p = self.fc(features=x.shape[1]*x.shape[2])(p)
+        p = self.fc(features=self.new_dim**2)(p)
         p = self.relu6(p)
-        p = self.fc(features=x.shape[1]*x.shape[2])(p)
-        p = self.relu6(p)
-        p = p.reshape((p.shape[0], x.shape[1], x.shape[2], 1))
+        p = p.reshape((p.shape[0], self.new_dim, self.new_dim, 1))
         p = self.conv(
             features=self.ch//2,
             kernel_size=(3, 3),
@@ -391,6 +406,7 @@ class ClsUnet(nn.Module):
         p = self.norm(**norm_kwargs)(p)
 
         # Encode x
+        x = jax.image.resize(x, (x.shape[0], self.new_dim, self.new_dim, x.shape[3]), method='lanczos5')
         x = self.conv(
             features=self.ch//2,
             kernel_size=(3, 3),
