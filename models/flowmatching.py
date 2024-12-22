@@ -354,7 +354,7 @@ class ClsUnet(nn.Module):
                                       kernel_init=jax.nn.initializers.he_normal(),
                                       bias_init=jax.nn.initializers.zeros)
     droprate: float = 0
-    dropout: nn.Module = functools.partial(nn.Dropout, deterministic=False)
+    dropout: nn.Module = nn.Dropout
     cfgs: Sequence[Tuple[int, int, int, int]] = (
         # e, c, n, s
         (1, 32, 1, 1),
@@ -416,6 +416,8 @@ class ClsUnet(nn.Module):
                     expand=e
                 )(z, **kwargs)
         
+        z = self.dropout(rate=self.droprate)(z, deterministic=not kwargs["training"])
+                
         # Post process
         z = self.conv(
             features=self.ch,
