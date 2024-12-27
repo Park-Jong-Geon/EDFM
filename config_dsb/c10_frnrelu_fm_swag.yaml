@@ -38,13 +38,13 @@ num_steps_per_sample: 1
 num_ensembles: 300
 num_models: 100
 swag_ckpt_dir:
-  ['checkpoints/sgd_swag/c10_new/sgd_swag_2/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_5/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_11/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_17/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_23/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_31/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_41/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_47/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_59/checkpoint_1000',
-  'checkpoints/sgd_swag/c10_new/sgd_swag_67/checkpoint_1000',]
+  ['checkpoints/sgd_swag/c10/sgd_swag_2/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_5/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_11/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_17/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_23/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_31/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_41/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_47/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_59/checkpoint_1000',
+  'checkpoints/sgd_swag/c10/sgd_swag_67/checkpoint_1000',]

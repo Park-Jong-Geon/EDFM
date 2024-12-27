@@ -1,0 +1,40 @@
+data_name: CIFAR100_x32
+model_depth: 32
+model_width: 4
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+# ClsUnet
+num_classes: 100
+ch: 128
+droprate: 0.
+
+optim_bs: 128
+optim_ne: 1000
+optim_lr: 0.00005
+optim_weight_decay: 0
+ema_decay: 0.999
+
+T: 10
+var: 4
+
+train_timestep_truncation: 0.001
+train_timestep_alpha: 3
+sample_timestep_alpha: 0.5
+
+mixup_alpha: 0.4
+
+num_steps_per_sample: 1
+num_ensembles: 300
+num_models: 100
+swag_ckpt_dir:
+  ['checkpoints/sgd_swag/c100/sgd_swag_2/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_5/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_11/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_17/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_23/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_31/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_41/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_47/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_59/checkpoint_1000',
+  'checkpoints/sgd_swag/c100/sgd_swag_67/checkpoint_1000',]

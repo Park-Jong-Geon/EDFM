@@ -139,27 +139,27 @@ def pdict(params, batch_stats=None, image_stats=None):
     return params_dict
 
 
-def get_scorenet(config):
-    score_func = partial(
-        MlpBridge,
-        num_blocks=config.num_blocks,
-        emb_len=config.emb_len,
-        emb_z_ch=config.emb_z_ch,
-        time_embedding_dim=config.time_embedding_dim,
-        tokens_mlp_dim=config.tokens_mlp_dim,
-        channels_mlp_dim=config.channels_mlp_dim,
-        fourier_scale=config.fourier_scale,
-        droprate=config.droprate,
-    )
-    return score_func
 # def get_scorenet(config):
 #     score_func = partial(
-#         ClsUnet,        
-#         num_classes = config.num_classes,
-#         ch = config.ch,
-#         droprate = config.droprate,
+#         MlpBridge,
+#         num_blocks=config.num_blocks,
+#         emb_len=config.emb_len,
+#         emb_z_ch=config.emb_z_ch,
+#         time_embedding_dim=config.time_embedding_dim,
+#         tokens_mlp_dim=config.tokens_mlp_dim,
+#         channels_mlp_dim=config.channels_mlp_dim,
+#         fourier_scale=config.fourier_scale,
+#         droprate=config.droprate,
 #     )
 #     return score_func
+def get_scorenet(config):
+    score_func = partial(
+        ClsUnet,        
+        num_classes = config.num_classes,
+        ch = config.ch,
+        droprate = config.droprate,
+    )
+    return score_func
 
 def build_dbn(config):
     resnet = get_resnet(config, head=True, return_emb=True)
