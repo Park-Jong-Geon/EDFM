@@ -4,20 +4,20 @@ model_width: 2
 model_style: FRN-Swish
 model_name: FlaxResNet
 
-# MLP-mixer
-num_blocks: 4
-emb_len: 256
-emb_z_ch: 8
-time_embedding_dim: 64
-tokens_mlp_dim: 32
-channels_mlp_dim: 16
-fourier_scale: 1.
-droprate: 0.
+# # MLP-mixer
+# num_blocks: 4
+# emb_len: 256
+# emb_z_ch: 8
+# time_embedding_dim: 64
+# tokens_mlp_dim: 32
+# channels_mlp_dim: 16
+# fourier_scale: 1.
+# droprate: 0.
 
-# # ClsUnet
-# num_classes: 10
-# ch: 64
-# droprate: 0.3
+# ClsUnet
+num_classes: 10
+ch: 64
+droprate: 0.3
 
 optim_bs: 128
 optim_ne: 1000
