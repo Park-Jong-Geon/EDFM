@@ -563,11 +563,11 @@ def launch(config, print_fn):
             **(dict(mutable=mutable) if train else dict()),
         )
         new_model_state = output[1] if train else None
-        epsilon, next_l_t = output[0] if train else output
+        epsilon, u_t = output[0] if train else output
 
-        # score_loss = ce_loss_with_target(epsilon, next_l_t)
-        score_loss = mse_loss(epsilon, next_l_t)
-        # score_loss = pseudohuber_loss(epsilon, next_l_t)
+        # score_loss = ce_loss_with_target(epsilon, u_t)
+        score_loss = mse_loss(epsilon, u_t)
+        # score_loss = pseudohuber_loss(epsilon, u_t)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
             a = config.distill_alpha

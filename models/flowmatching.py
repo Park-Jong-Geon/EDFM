@@ -387,15 +387,15 @@ class ClsUnet(nn.Module):
         
         # Encode t
         t = timestep_embedding(t, self.ch//4)
-        t = self.fc(features=self.ch)(t)
-        t = self.silu(t)
-        t = self.fc(features=self.ch)(t)
-        t = self.silu(t)
+        for _ in range(2):
+            t = self.fc(features=self.ch)(t)
+            t = self.silu(t)
 
         # Encode p; upsample
-        p = self.fc(features=self.new_dim**2)(p)
-        p = self.relu6(p)
-        p = p.reshape((p.shape[0], self.new_dim, self.new_dim, 1))
+        for _ in range(2):
+            p = self.fc(features=x.shape[1]*x.shape[2])(p)
+            p = self.relu6(p)
+        p = p.reshape((p.shape[0], x.shape[1], x.shape[2], 1))
         p = self.conv(
             features=self.ch//2,
             kernel_size=(3, 3),
@@ -406,7 +406,7 @@ class ClsUnet(nn.Module):
         p = self.norm(**norm_kwargs)(p)
 
         # Encode x
-        x = jax.image.resize(x, (x.shape[0], self.new_dim, self.new_dim, x.shape[3]), method='lanczos5')
+        # x = jax.image.resize(x, (x.shape[0], self.new_dim, self.new_dim, x.shape[3]), method='lanczos5')
         x = self.conv(
             features=self.ch//2,
             kernel_size=(3, 3),
@@ -468,10 +468,9 @@ class FlowMatching(nn.Module):
 
     def conditional_dbn(self, rng, l0, x, **kwargs):
         z, c = self.resnet(x, **kwargs)        
-        l_t, t, next_l_t = self.forward(rng, l0, c)
-        # next_l_t = jax.nn.softmax(next_l_t)
+        l_t, t, u_t = self.forward(rng, l0, c)
         eps = self.score(l_t, z, t, **kwargs)
-        return eps, next_l_t
+        return eps, u_t
 
     def forward(self, rng, l_label, c):
         # Sample t
@@ -488,8 +487,7 @@ class FlowMatching(nn.Module):
         # Compute diff
         u_t = (l_label - x_t) / (1-_t)
         
-        # next_x_t = x_t + (1 / self.steps) * u_t
-        return x_t, t, u_t #next_x_t
+        return x_t, t, u_t
 
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
