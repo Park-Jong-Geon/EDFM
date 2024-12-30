@@ -468,9 +468,11 @@ class FlowMatching(nn.Module):
 
     def conditional_dbn(self, rng, l0, x, **kwargs):
         z, c = self.resnet(x, **kwargs)        
-        l_t, t, u_t = self.forward(rng, l0, c)
+        l_t, t, u_t, l_1 = self.forward(rng, l0, c)
         eps = self.score(l_t, z, t, **kwargs)
-        return eps, u_t
+        x_t = l_t + (1-t[:, None]) * eps
+        p_1 = jax.nn.softmax(l_1)
+        return eps, u_t, p_1, x_t
 
     def forward(self, rng, l_label, c):
         # Sample t
@@ -487,7 +489,7 @@ class FlowMatching(nn.Module):
         # Compute diff
         u_t = (l_label - x_t) / (1-_t)
         
-        return x_t, t, u_t
+        return x_t, t, u_t, l_label
 
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
