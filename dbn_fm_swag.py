@@ -28,8 +28,7 @@ from data.build import build_dataloaders
 from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
 from models.resnet import FlaxResNet, FlaxResNetBase
-from models.i2sb import ClsUnet
-from models.flowmatching import MlpBridge, ClsUnet, FlowMatching
+from models.flowmatching import FlowMatching, Mlp
 from collections import OrderedDict
 from tqdm import tqdm
 from utils import WandbLogger
@@ -138,26 +137,15 @@ def pdict(params, batch_stats=None, image_stats=None):
         params_dict["image_stats"] = image_stats
     return params_dict
 
-
-# def get_scorenet(config):
-#     score_func = partial(
-#         MlpBridge,
-#         num_blocks=config.num_blocks,
-#         emb_len=config.emb_len,
-#         emb_z_ch=config.emb_z_ch,
-#         time_embedding_dim=config.time_embedding_dim,
-#         tokens_mlp_dim=config.tokens_mlp_dim,
-#         channels_mlp_dim=config.channels_mlp_dim,
-#         fourier_scale=config.fourier_scale,
-#         droprate=config.droprate,
-#     )
-#     return score_func
 def get_scorenet(config):
     score_func = partial(
-        ClsUnet,        
-        num_classes = config.num_classes,
-        ch = config.ch,
-        droprate = config.droprate,
+        Mlp,        
+        hidden_size=config.hidden_size,
+        time_embed_dim=config.time_embed_dim,
+        num_blocks=config.num_blocks,
+        num_classes=config.num_classes,
+        droprate=config.droprate,
+        time_scale=config.time_scale,
     )
     return score_func
 
