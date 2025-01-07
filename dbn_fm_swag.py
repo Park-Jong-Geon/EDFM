@@ -300,7 +300,7 @@ def launch(config, print_fn):
     # ------------------------------------------------------------------------
     dataloaders = build_dataloaders(config)
     config.num_classes = dataloaders["num_classes"]
-    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"] * config.num_steps_per_sample
+    config.trn_steps_per_epoch = dataloaders["trn_steps_per_epoch"]
 
     # ------------------------------------------------------------------------
     # define and load resnet
@@ -515,8 +515,8 @@ def launch(config, print_fn):
     @partial(jax.pmap, axis_name="batch")
     def step_label(state, batch):
         rng = state.rng
-        swag_param_list = []        
-        for _ in range(config.num_steps_per_sample):
+        swag_param_list = []    
+        for _ in range(config.num_teachers):
             swag_state = random.choice(swag_state_list)
             swag_params_per_seed = sample_swag_diag(1, rng, swag_state)
             swag_param_list += swag_params_per_seed
@@ -539,9 +539,15 @@ def launch(config, print_fn):
             images = batch["images"]
             logits0 = forward_resnet(res_params_dict, images)
             # logits0: (B, d)
-            logits0 = logits0 - logits0.mean(-1, keepdims=True)
+            # logits0 = logits0 - logits0.mean(-1, keepdims=True)
             logitsA.append(logits0)
         logitsB = logitsA[0]
+
+        _logitsA = jnp.stack(logitsA)
+        logprobs = jax.nn.log_softmax(_logitsA, axis=-1)
+        ens_logprobs = jax.scipy.special.logsumexp(
+            logprobs, axis=0) - np.log(logprobs.shape[0])
+        logitsA = ens_logprobs - ens_logprobs.mean(-1, keepdims=True)
 
         batch["logitsB"] = logitsB
         batch["logitsA"] = logitsA
@@ -572,7 +578,10 @@ def launch(config, print_fn):
     # define train step
     # ------------------------------------------------------------------------
 
-    def loss_func(params, state, batch, logitsA, train=True):
+    def loss_func(params, state, batch, train=True):
+        logitsA = batch["logitsA"]
+        logitsB = batch["logitsB"]
+        
         drop_rng, score_rng = jax.random.split(state.rng)
         params_dict = pdict(
             params=params,
@@ -582,15 +591,15 @@ def launch(config, print_fn):
         mutable = ["batch_stats"]
         output = state.apply_fn(
             params_dict, score_rng,
-            logitsA, batch["images"],
+            logitsB, batch["images"],
             training=train,
             rngs=rngs_dict,
             **(dict(mutable=mutable) if train else dict()),
         )
         new_model_state = output[1] if train else None
-        epsilon, u_t, p_1, x_t = output[0] if train else output
-
-        score_loss = 0.01 * mse_loss(epsilon, u_t) + ce_loss_with_target(x_t, p_1)
+        epsilon, u_t, _, x_t = output[0] if train else output
+        p_ens = jax.nn.softmax(logitsA)
+        score_loss = 0.001 * mse_loss(epsilon, u_t) + ce_loss_with_target(x_t, p_ens)
         # score_loss = pseudohuber_loss(epsilon, u_t)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
@@ -614,26 +623,25 @@ def launch(config, print_fn):
 
     @ partial(jax.pmap, axis_name="batch")
     def step_train(state, batch):
-        for logitsA in batch["logitsA"]:
-            def loss_fn(params):
-                _loss_func = get_loss_func()
-                return _loss_func(params, state, batch, logitsA)
-            
-            (loss, (metrics, new_model_state)), grads = jax.value_and_grad(
-                loss_fn, has_aux=True)(state.params)
-            grads = jax.lax.pmean(grads, axis_name="batch")
+        def loss_fn(params):
+            _loss_func = get_loss_func()
+            return _loss_func(params, state, batch)
+        
+        (loss, (metrics, new_model_state)), grads = jax.value_and_grad(
+            loss_fn, has_aux=True)(state.params)
+        grads = jax.lax.pmean(grads, axis_name="batch")
 
-            state = state.apply_gradients(
-                grads=grads, batch_stats=new_model_state.get("batch_stats"))
-            a = config.ema_decay
-            def update_ema(wt, ema_tm1): return jnp.where(
-                (wt != ema_tm1) & (a < 1), (1-a)*wt + a*ema_tm1, wt)
-            state = state.replace(
-                ema_params=jax.tree_util.tree_map(
-                    update_ema,
-                    state.params,
-                    state.ema_params))
-            metrics = jax.lax.psum(metrics, axis_name="batch")
+        state = state.apply_gradients(
+            grads=grads, batch_stats=new_model_state.get("batch_stats"))
+        a = config.ema_decay
+        def update_ema(wt, ema_tm1): return jnp.where(
+            (wt != ema_tm1) & (a < 1), (1-a)*wt + a*ema_tm1, wt)
+        state = state.replace(
+            ema_params=jax.tree_util.tree_map(
+                update_ema,
+                state.params,
+                state.ema_params))
+        metrics = jax.lax.psum(metrics, axis_name="batch")
         return state, metrics
 
     # ------------------------------------------------------------------------
