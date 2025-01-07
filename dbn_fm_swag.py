@@ -599,7 +599,7 @@ def launch(config, print_fn):
         new_model_state = output[1] if train else None
         epsilon, u_t, _, x_t = output[0] if train else output
         p_ens = jax.nn.softmax(logitsA)
-        score_loss = 0.001 * mse_loss(epsilon, u_t) + ce_loss_with_target(x_t, p_ens)
+        score_loss = mse_loss(epsilon, u_t) + config.ce_lambda * ce_loss_with_target(x_t, p_ens)
         # score_loss = pseudohuber_loss(epsilon, u_t)
         if batch.get("logitsC") is not None:
             logitsC = batch["logitsC"]
