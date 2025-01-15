@@ -1,7 +1,0 @@
-method: de
-ensemble: 3
-checkpoints:
-  - ./checkpoints/frnv1000_sd2_tpu
-  - ./checkpoints/frnv1000_sd3_tpu
-  - ./checkpoints/frnv1000_sd5_tpu
-  - ./checkpoints/frnv1000_sd7_tpu

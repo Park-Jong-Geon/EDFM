@@ -1,3 +1,0 @@
-method: naive_ed
-checkpoints:
-  - ./checkpoints/naive_ed/c10/example
