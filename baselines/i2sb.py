@@ -43,6 +43,29 @@ class FlowMatching(nn.Module):
         
         return x_t, t, u_t
 
+    def forward(self, rng, l_label, c):
+        n_T = dsb_stats["n_T"]
+        _sigma_weight_t = dsb_stats["sigma_weight_t"]
+        _sigma_t = dsb_stats["sigma_t"]
+        _bigsigma_t = dsb_stats["bigsigma_t"]
+
+        t_rng, n_rng = jax.random.split(rng, 2)
+
+        if _ts is None:
+            _ts = jax.random.randint(t_rng, (x0.shape[0],), 1, n_T)  # (B,)
+        sigma_weight_t = _sigma_weight_t[_ts]  # (B,)
+        sigma_weight_t = expand_to_broadcast(sigma_weight_t, x0, axis=1)
+        sigma_t = _sigma_t[_ts]
+        mu_t = (sigma_weight_t*x0+(1-sigma_weight_t)*x1)
+        bigsigma_t = _bigsigma_t[_ts]  # (B,)
+        bigsigma_t = expand_to_broadcast(bigsigma_t, mu_t, axis=1)
+
+        # q(X_t|X_0,X_1) = N(X_t;mu_t,bigsigma_t)
+        noise = jax.random.normal(n_rng, mu_t.shape)  # (B, d)
+        x_t = mu_t + noise*jnp.sqrt(bigsigma_t)
+        t = _ts/n_T
+        return x_t, t, mu_t, sigma_t, _ts
+
     def sample(self, *args, **kwargs):
         return self.conditional_sample(*args, **kwargs)
 

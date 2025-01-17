@@ -1,8 +1,13 @@
 data_name: CIFAR10_x32
 model_depth: 32
 model_width: 2
+model_planes: 16
+model_blocks: null
 model_style: FRN-Swish
 model_name: FlaxResNet
+first_conv: null
+first_pool: null
+model_nobias: null
 
 # Denoising MLP
 hidden_size: 256
@@ -12,15 +17,18 @@ num_classes: 10
 droprate: 0.
 time_scale: 1000.
 
-optim_bs: 128 
+optim_bs: 256
 optim_ne: 1000
 optim_lr: 0.00005
+optim_base: adam
 optim_weight_decay: 0
 ema_decay: 0.999
 
-T: 10
+mse_power: 2
+
 var: 4
 ce_lambda: 100
+mid_step: 0.8
 
 train_timestep_truncation: 0.001
 train_timestep_alpha: 3
@@ -31,14 +39,3 @@ mixup_alpha: 0.4
 num_teachers: 30
 num_ensembles: 300
 num_models: 100
-swag_ckpt_dir:
-  ['checkpoints/sgd_swag/c10/sgd_swag_2/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_5/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_11/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_17/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_23/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_31/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_41/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_47/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_59/checkpoint_1000',
-  'checkpoints/sgd_swag/c10/sgd_swag_67/checkpoint_1000',]

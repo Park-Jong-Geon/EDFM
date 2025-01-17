@@ -1,0 +1,25 @@
+baseline_method: KD
+data_name: CIFAR10_x32
+
+num_classes: 10
+model_depth: 32
+model_width: 2
+model_planes: 16
+model_blocks: null
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+optim_bs: 256
+optim_ne: 1000
+optim_lr: 0.1
+optim_weight_decay: 0.001
+optim_momentum: 0.9
+optim: sgd
+
+warmup_factor: 0.01
+warmup_steps: 0
+
+dist_alpha: 1
+dist_temp: 4
+
+num_teachers: 30

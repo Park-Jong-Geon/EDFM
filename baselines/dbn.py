@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import datetime
 import wandb
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 from functools import partial
 from tqdm import tqdm
 
@@ -23,16 +23,19 @@ import orbax
 import optax
 
 from data.build import build_dataloaders 
-from giung2.metrics import evaluate_acc, evaluate_nll, get_optimal_temperature, temperature_scaling
+from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
 
 from models.resnet import FlaxResNet
 from models.mlp import Mlp
 from models.flowmatching import FlowMatching
 
-from utils import batch_mul, get_config, WandbLogger
+from utils import batch_mul
+from utils import WandbLogger
+from utils import get_config
 
 from swag import sample_swag_diag
+from sgd_swag import update_swag_batch_stats
 # from metrics.wasserstein2 import wasserstein_2_distance
 
 random.seed(0)
@@ -44,18 +47,6 @@ class TrainState(train_state.TrainState):
     rng: Any
     ema_params: Any
     batch_stats: Any = None
-
-
-def update_swag_batch_stats(state, params_dict, batch, batch_stats):
-    mutable = ["intermediates", "batch_stats"]
-    params_dict["batch_stats"] = batch_stats
-    _, new_state = state.apply_fn(
-        params_dict,
-        batch['images'],
-        mutable=mutable,
-        use_running_average=False,
-    )
-    return new_state['batch_stats']
 
 
 def load_saved(ckpt_dir):
@@ -140,7 +131,7 @@ def build_dbn(config):
         var=config.var,
         num_classes=config.num_classes,
         eps=config.train_timestep_truncation,
-        train_timestep_alpha=config.train_timestep_alpha,
+        alpha=config.train_timestep_alpha,
     )
     return dbn
 
@@ -215,13 +206,12 @@ def launch(config):
             swag_state = ckpt['swag_state']
             batch_stats = ckpt['batch_stats']
             image_stats = ckpt['image_stats']
-        swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
         swag_state_list.append(swag_state)
 
     # ------------------------------------------------------------------------
     # define and load resnet
     # ------------------------------------------------------------------------
-    resnet = get_resnet(config)
+    resnet = get_resnet(config, head=True)
     resnet = resnet()
     @jax.jit
     def forward_resnet(params_dict, images):
@@ -471,16 +461,9 @@ def launch(config):
             prob, labels, log_input=False, reduction="none")
         nll = evaluate_nll(
             prob, labels, log_input=False, reduction='none')
-        
-        T = get_optimal_temperature(prob, labels, log_input=False)
-        scaled_prob = temperature_scaling(prob, T, log_input=False)
-        cnll = evaluate_nll(
-            scaled_prob, labels, log_input=False, reduction='none')
-        
         acc = reduce_sum(acc, marker)
         nll = reduce_sum(nll, marker)
-        cnll = reduce_sum(cnll, marker)
-        return acc, nll, cnll
+        return acc, nll
 
     def sample_func(state, batch):
         labels = batch["labels"]
@@ -505,17 +488,15 @@ def launch(config):
         prob_1, _ = model_bd.sample(
             score_rng, _fm_sample, batch["images"], 1)
 
-        acc_ens, nll_ens, cnll_ens = evaluate_accnll(prob_ens, labels, batch["marker"])
-        acc_1, nll_1, cnll_1 = evaluate_accnll(prob_1, labels, batch["marker"])
+        acc_ens, nll_ens = evaluate_accnll(prob_ens, labels, batch["marker"])
+        acc_1, nll_1 = evaluate_accnll(prob_1, labels, batch["marker"])
         metrics = OrderedDict({
             "count": jnp.sum(batch["marker"]),
         })
         metrics[f"acc_ens"] = acc_ens
         metrics[f"nll_ens"] = nll_ens
-        metrics[f"cnll_ens"] = cnll_ens
         metrics[f"acc_1"] = acc_1
         metrics[f"nll_1"] = nll_1
-        metrics[f"cnll_1"] = cnll_1
         return metrics
 
     def _sample_func(state, batch):
@@ -814,9 +795,6 @@ def launch(config):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--seed', default=2025, type=int)
-    parser.add_argument('--save', default=None, type=str)
-    
     parser.add_argument('--data_root', default='./data/', type=str,
                         help='root directory containing datasets (default: ./data/)')
     parser.add_argument('--data_augmentation', default='standard', type=str,
@@ -825,8 +803,6 @@ def main():
                         help='use the proportional train split if specified (default: 1.0)')
     parser.add_argument("--config", default=None, type=str)
     parser.add_argument("--nowandb", action="store_true")
-    
-    parser.add_argument('--resume', default=None, type=str)
     
     args, argv = parser.parse_known_args(sys.argv[1:])
     if args.config is not None:
