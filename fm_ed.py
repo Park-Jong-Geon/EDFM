@@ -27,7 +27,8 @@ from giung2.metrics import evaluate_acc, evaluate_nll, get_optimal_temperature, 
 from giung2.models.layers import FilterResponseNorm
 
 from models.resnet import FlaxResNet
-from models.mlp import Mlp
+# from models.mlp import Mlp
+from models.mlp_v2 import Mlp
 from models.flowmatching import FlowMatching
 
 from utils import batch_mul, get_config, WandbLogger
