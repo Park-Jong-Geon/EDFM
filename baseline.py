@@ -274,6 +274,29 @@ def launch(config):
         x.size for x in jax.tree_util.tree_leaves(variables["params"]))
     wl = WandbLogger()
 
+    # define mixup
+    @partial(jax.pmap, axis_name="batch")
+    def step_mixup(state, batch):
+        count = jnp.sum(batch["marker"])
+        x = batch["images"]
+        y = batch["labels"]
+        batch_size = x.shape[0]
+        a = config.mixup_alpha
+        beta_rng, perm_rng = jax.random.split(state.rng)
+
+        lamda = jnp.where(a > 0, jax.random.beta(beta_rng, a, a), 1)
+
+        perm_x = jax.random.permutation(perm_rng, x)
+        perm_y = jax.random.permutation(perm_rng, y)
+        mixed_x = (1-lamda)*x+lamda*perm_x
+        mixed_y = jnp.where(lamda < 0.5, y, perm_y)
+        mixed_x = jnp.where(count == batch_size, mixed_x, x)
+        mixed_y = jnp.where(count == batch_size, mixed_y, y)
+
+        batch["images"] = mixed_x
+        batch["labels"] = mixed_y
+        return batch
+
     def summarize_metrics(metrics, key="trn"):
         metrics = common_utils.get_metrics(metrics)
         summarized = {
@@ -297,6 +320,8 @@ def launch(config):
         trn_loader = dataloaders['dataloader'](rng=epoch_rng)
         trn_loader = jax_utils.prefetch_to_device(trn_loader, size=2)
         for batch_idx, batch in enumerate(trn_loader):
+            if config.mixup_alpha > 0:
+                batch = step_mixup(state, batch)
             batch = step_label(state, batch)
             state, metrics = step_trn(state, batch)
             trn_metric.append(metrics)
