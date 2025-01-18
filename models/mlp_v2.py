@@ -72,7 +72,7 @@ class Mlp(nn.Module):
             shift_mlp, scale_mlp, gate_mlp = jnp.split(t, 3, axis=-1)
             
             x = nn.LayerNorm(use_bias=False, use_scale=False)(x)
-            x = x * (1 + scale_mlp) + shift_mlp
+            x = x * (1 + scale_mlp[:, None, :]) + shift_mlp[:, None, :]
             x = nn.Dense(
                     features=self.hidden_size,
                     dtype=self.dtype,
@@ -91,7 +91,7 @@ class Mlp(nn.Module):
             x = nn.gelu(x)
             x = jnp.swapaxes(x, -2, -1)
             
-            x = x_skip + (gate_mlp * x)
+            x = x_skip + (gate_mlp[:, None, :] * x)
             x = nn.Dropout(rate=self.droprate)(x, deterministic=not kwargs["training"])
             
         x = x.mean(axis=1)
