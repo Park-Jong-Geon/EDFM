@@ -48,7 +48,7 @@ def baseline_method(config):
         return ProxyEnDD(temperature=config.dist_temp,
                          s_offset=config.s_offset,
                          t_offset=config.t_offset,
-                         dtype=config.dtype,
+                         dtype=jnp.float32,
                          eps=config.eps)
     else:
         raise NotImplementedError
@@ -60,7 +60,7 @@ def get_resnet(config):
             FlaxResNet,
             depth=config.model_depth,
             widen_factor=config.model_width,
-            dtype=config.dtype,
+            dtype=jnp.float32,
             pixel_mean=PIXEL_MEAN,
             pixel_std=PIXEL_STD,
             num_classes=config.num_classes,
@@ -332,8 +332,8 @@ def launch(config):
                 save_state = jax_utils.unreplicate(state)
                 ckpt = dict(
                     params=save_state.params,
-                    batch_stats=getattr(save_state, "batch_stats", None),
-                    image_stats=getattr(save_state, "image_stats", None),
+                    batch_stats=save_state.batch_stats,
+                    image_stats=save_state.image_stats,
                     config=vars(config),
                     best_acc=best_acc)
                 orbax_checkpointer = orbax.checkpoint.PyTreeCheckpointer()
@@ -400,7 +400,7 @@ def main():
 
     parser.add_argument('--seed', default=2025, type=int)
     parser.add_argument('--save', default=None, type=str)
-    parser.add_argument('--dtype', default=jnp.float32, type=jnp.dtype)
+    # parser.add_argument('--dtype', default=jnp.float32, type=jnp.dtype)
     parser.add_argument('--data_root', default='./data/', type=str,
                         help='root directory containing datasets (default: ./data/)')
     parser.add_argument('--data_augmentation', default='standard', type=str,
