@@ -422,10 +422,10 @@ def launch(config):
             **(dict(mutable=mutable) if train else dict()),
         )
         new_model_state = output[1] if train else None
-        epsilon, u_t, x_t = output[0] if train else output
+        epsilon, u_t, x_t, t = output[0] if train else output
         p_ens = jax.nn.softmax(logitsA)
         score_loss = mse_loss(epsilon, u_t) 
-        ce_reg = config.ce_lambda * ce_loss_with_target(x_t, p_ens)
+        ce_reg = config.ce_lambda * (1-t)**2 * ce_loss_with_target(x_t, p_ens)
         total_loss = reduce_mean(score_loss + ce_reg, batch["marker"])
 
         count = jnp.sum(batch["marker"])

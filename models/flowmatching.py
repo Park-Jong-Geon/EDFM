@@ -25,7 +25,7 @@ class FlowMatching(nn.Module):
         eps = self.score(l_t, z, t, **kwargs)
         x_t = l_t + (1-t[:, None]) * eps
         
-        return eps, u_t, x_t
+        return eps, u_t, x_t, t
 
     def forward(self, rng, l_label, c):
         # Sample t
