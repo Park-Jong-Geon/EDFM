@@ -19,8 +19,7 @@ optim: sgd
 warmup_factor: 0.01
 warmup_steps: 5
 
-dist_alpha: 1
-dist_temp: 2
+dist_temp: 1
 s_offset: 1
 t_offset: 1
 eps: 1.0e-8

@@ -19,7 +19,6 @@ optim: sgd
 warmup_factor: 0.01
 warmup_steps: 0
 
-dist_alpha: 1
-dist_temp: 4
+dist_temp: 1
 
 num_teachers: 30
