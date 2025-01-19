@@ -17,9 +17,9 @@ num_classes: 100
 droprate: 0.
 time_scale: 1000.
 
-optim_bs: 256
+optim_bs: 128
 optim_ne: 1000
-optim_lr: 0.00025
+optim_lr: 0.00005
 optim_base: adam
 optim_weight_decay: 0
 ema_decay: 0.999
