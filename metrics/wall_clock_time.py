@@ -22,28 +22,30 @@ import jaxlib
 import datetime
 import wandb
 
-import defaults_dsb as defaults
+# import defaults_dsb as defaults
 from tabulate import tabulate
 import sys
 from data.build import build_dataloaders 
 from giung2.metrics import evaluate_acc, evaluate_nll
 from giung2.models.layers import FilterResponseNorm
-from models.resnet import FlaxResNet, FlaxResNetBase
-from models.flowmatching import FlowMatching, Mlp
+from models.resnet import FlaxResNet
+from models.flowmatching import FlowMatching
+from models.mlp import Mlp
+# from models.mlp_v2 import Mlp
 from collections import OrderedDict
 from tqdm import tqdm
 from utils import WandbLogger
 from utils import get_config
 from tqdm import tqdm
 from functools import partial
-import defaults_sgd
+import argparse
 from einops import rearrange
 
-from swag import sample_swag_diag
-from sgd_swag import update_swag_batch_stats
+# from swag import sample_swag_diag
+# from sgd_swag import update_swag_batch_stats
 from collections import namedtuple
 import copy
-from models.hungarian_cover import hungarian_cover_tpu_matcher
+# from models.hungarian_cover import hungarian_cover_tpu_matcher
 from utils import batch_mul
 import time
 
@@ -54,16 +56,18 @@ class TrainState(train_state.TrainState):
     ema_params: Any
     batch_stats: Any = None
 
+PIXEL_MEAN = (0.49, 0.48, 0.44)
+PIXEL_STD = (0.2, 0.2, 0.2)
 
 def get_resnet(config, head=False, return_emb=False):
     if config.model_name == 'FlaxResNet':
         _ResNet = partial(
-            FlaxResNet if head else FlaxResNetBase,
+            FlaxResNet if head else None,
             depth=config.model_depth,
             widen_factor=config.model_width,
             dtype=config.dtype,
-            pixel_mean=defaults.PIXEL_MEAN,
-            pixel_std=defaults.PIXEL_STD,
+            pixel_mean=PIXEL_MEAN,
+            pixel_std=PIXEL_STD,
             num_classes=config.num_classes,
             num_planes=config.model_planes,
             num_blocks=tuple(
@@ -157,15 +161,14 @@ def build_dbn(config):
     dbn = FlowMatching(
         res_net=resnet,
         score_net=score_net,
-        steps=config.T,
         var=config.var,
         num_classes=config.num_classes,
         eps=config.train_timestep_truncation,
-        alpha=config.train_timestep_alpha,
+        train_timestep_alpha=config.train_timestep_alpha,
     )
     return dbn
 
-def fm_sample(score, l0, z, c, config, steps, num_models):
+def fm_sample(score, l0, z, config, num_models):
     batch_size = l0.shape[0]
     
     zero = jnp.array([0.])
@@ -283,8 +286,8 @@ def launch(config, print_fn):
     model_dtype = jnp.float32
     config.dtype = model_dtype
     config.image_stats = dict(
-        m=jnp.array(defaults_sgd.PIXEL_MEAN),
-        s=jnp.array(defaults_sgd.PIXEL_STD))
+        m=jnp.array(PIXEL_MEAN),
+        s=jnp.array(PIXEL_STD))
 
     # ------------------------------------------------------------------------
     # load image dataset (C10, C100, TinyImageNet, ImageNet)
@@ -682,7 +685,7 @@ def launch(config, print_fn):
         
         # Ensemble
         _fm_sample = partial(
-            fm_sample, config=config, steps=steps, num_models=config.num_ensembles)
+            fm_sample, config=config, num_models=config.num_ensembles)
         prob_ens, _ = model_bd.sample(
             score_rng, _fm_sample, batch["images"], config.num_ensembles)
         
@@ -749,7 +752,7 @@ def launch(config, print_fn):
         rngs_dict = dict(dropout=drop_rng)
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
-            fm_sample, config=config, steps=steps, num_models=config.num_models)
+            fm_sample, config=config, num_models=config.num_models)
         _, val = model_bd.sample(
             score_rng, _fm_sample, batch["images"], config.num_models)
         return val
@@ -1022,7 +1025,7 @@ def launch(config, print_fn):
     model_bd = dbn.bind(params_dict, rngs=rngs_dict)
 
     _fm_sample = partial(
-        fm_sample, config=config, steps=3, num_models=config.num_ensembles)
+        fm_sample, config=config, num_models=config.num_ensembles)
     start = time.time()
     prob_ens, _ = model_bd.sample(
         jax.random.PRNGKey(42), _fm_sample, input, config.num_ensembles)
@@ -1035,8 +1038,6 @@ def launch(config, print_fn):
     end = time.time()
     print(f"Elapsed time without score: {end-start:.8f} sec")
 
-    _fm_sample = partial(
-        fm_sample, config=config, steps=3, num_models=config.num_ensembles)
     start = time.time()
     prob_ens, _ = model_bd.sample(
         jax.random.PRNGKey(42), _fm_sample, input, config.num_ensembles)
@@ -1077,7 +1078,7 @@ def launch(config, print_fn):
 
 
 def main():
-    parser = defaults.default_argument_parser()
+    parser = argparse.ArgumentParser()
 
     parser.add_argument("--config", default=None, type=str)
     args, argv = parser.parse_known_args(sys.argv[1:])
@@ -1113,6 +1114,12 @@ def main():
     parser.add_argument("--ema_decay", default=0.9999, type=float)
     parser.add_argument("--mse_power", default=2, type=int)
     parser.add_argument("--mixup_alpha", default=0, type=float)
+    parser.add_argument('--data_root', default='./data/', type=str,
+                        help='root directory containing datasets (default: ./data/)')
+    parser.add_argument('--data_augmentation', default='standard', type=str,
+                        choices=['standard',])
+    parser.add_argument('--data_proportional', default=1.0, type=float,
+                        help='use the proportional train split if specified (default: 1.0)')
     # ---------------------------------------------------------------------------------------
     # experiemnts
     # ---------------------------------------------------------------------------------------
