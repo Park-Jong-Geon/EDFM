@@ -320,6 +320,8 @@ def launch(config):
         trn_loader = dataloaders['dataloader'](rng=epoch_rng)
         trn_loader = jax_utils.prefetch_to_device(trn_loader, size=2)
         for batch_idx, batch in enumerate(trn_loader):
+            batch_rng = jax.random.fold_in(epoch_rng, batch_idx)
+            state = state.replace(rng=jax_utils.replicate(batch_rng))
             if config.mixup_alpha > 0:
                 batch = step_mixup(state, batch)
             batch = step_label(state, batch)
