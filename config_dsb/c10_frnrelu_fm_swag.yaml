@@ -19,15 +19,15 @@ time_scale: 1000.
 
 optim_bs: 256
 optim_ne: 1000
-optim_lr: 0.00005
-optim_base: adam
-optim_weight_decay: 0
-ema_decay: 0.999
+optim_lr: 0.001 #0.00005
+optim_base: sgd #adam
+optim_weight_decay: 0.0005 #0
+ema_decay: 0. #0.999
 
 mse_power: 2
 
 var: 4
-ce_lambda: 100
+ce_lambda: 500
 mid_step: 0.8
 
 train_timestep_truncation: 0.001
