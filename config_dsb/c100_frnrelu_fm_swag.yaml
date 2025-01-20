@@ -19,9 +19,10 @@ time_scale: 1000.
 
 optim_bs: 256
 optim_ne: 1000
-optim_lr: 0.001 #0.00005
+optim_lr: 0.01 #0.00005
 optim_base: sgd #adam
 optim_weight_decay: 0.0005 #0
+optim_momentum: 0.9
 ema_decay: 0. #0.999
 
 mse_power: 2
