@@ -127,6 +127,22 @@ def load_saved(ckpt_dir):
     return params, ema_params, batch_stats
 
 
+def load_resnet(ckpt_dir):
+    ckpt = checkpoints.restore_checkpoint(
+        ckpt_dir=ckpt_dir,
+        target=None
+    )
+    if ckpt.get("model") is not None:
+        params = ckpt["model"]["params"]
+        batch_stats = ckpt["model"].get("batch_stats")
+        image_stats = ckpt["model"].get("image_stats")
+    else:
+        params = ckpt["params"]
+        batch_stats = ckpt.get("batch_stats")
+        image_stats = ckpt.get("image_stats")
+    return ckpt, params, batch_stats, image_stats
+
+
 def pdict(params, batch_stats=None, image_stats=None):
     params_dict = dict(params=params)
     if batch_stats is not None:
@@ -282,7 +298,7 @@ def launch(config):
         logits = state["intermediates"]["cls.logit"][0]
         return logits
     
-    if not config.mode == 'teacher':
+    if config.mode == 'fm':
         print(f"Loading checkpoint {config.saved_model_path}...")
         saved_params, saved_ema_params, saved_batch_stats = load_saved(config.saved_model_path)
         
@@ -339,6 +355,8 @@ def launch(config):
             elif "score" in path:
                 return "score"
             else:
+                print(path)
+                print(v)
                 raise NotImplementedError
         partitions = flax.core.freeze(
             flax.traverse_util.path_aware_map(tagging, variables["params"]))
@@ -353,7 +371,21 @@ def launch(config):
             batch_stats=variables.get("batch_stats"),
             rng=state_rng
         )
-    else:
+
+    elif config.mode == 'kd' or config.mode == 'endd':
+        rng = jax.random.PRNGKey(config.seed)
+        init_rng, sub_rng = jax.random.split(rng)
+
+        config.image_stats = dict(
+            m=jnp.array(PIXEL_MEAN),
+            s=jnp.array(PIXEL_STD))
+
+        resnet_state, _, _, _ = load_resnet(config.saved_model_path)
+        params = resnet_state['params']
+        # d = resnet_state['model']['opt_state']['1']
+        # swag_state = namedtuple('SWAGState', d.keys())(*d.values())
+
+    elif config.mode == 'teacher':
         state = None
         
         rng = jax.random.PRNGKey(config.seed)
@@ -369,6 +401,8 @@ def launch(config):
                 image_stats = ckpt['image_stats']
             swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
             swag_state_list.append(swag_state)
+    else:
+        raise NotImplementedError
 
     # ------------------------------------------------------------------------
     # collect logits
@@ -428,20 +462,20 @@ def launch(config):
         return batch
 
     @partial(jax.pmap, axis_name="batch")
-    def extract_from_kd(batch, state, rng):
+    def extract_from_kd(batch, params, rng):
         params_dict = pdict(
-            params=saved_params,
+            params=params,
             image_stats=config.image_stats,
             batch_stats=None) # no batch stats for now        
         batch["logitsA"] = forward_resnet(params_dict, batch["images"])
         return batch
 
-    assert config.mode in ['kd', 'fm', 'teacher']
+    assert config.mode in ['kd', 'endd', 'fm', 'teacher']
     if config.mode == 'teacher':
         extract = extract_from_teacher
     elif config.mode == 'fm':
         extract = extract_from_fm
-    elif config.mode == 'kd':
+    elif config.mode == 'kd' or config.mode == 'endd':
         extract = extract_from_kd
     else:
         raise NotImplementedError
@@ -450,6 +484,7 @@ def launch(config):
     # init settings
     # ------------------------------------------------------------------------
     cross_replica_mean = jax.pmap(lambda x: jax.lax.pmean(x, 'x'), 'x')
+    state = params
     state = jax_utils.replicate(state)
         
     data_loader = dataloaders["dataloader"]()
@@ -461,9 +496,11 @@ def launch(config):
         batch = extract(batch, state, jax_utils.replicate(batch_rng))
         # save logits
         logits = batch["logitsA"]
-        extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
+        extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+        # extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
     extracted_logits = jnp.stack(extracted_logits)
-    extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
+    extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
+    # extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
     
     print(f'Output shape: {extracted_logits.shape}')
     np.save(f'{config.save_path}{config.data_name}_{config.mode}_{config.name}.npy',
