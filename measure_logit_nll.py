@@ -10,12 +10,17 @@ def ce_loss(logits, labels):
     loss = jnp.mean(-jnp.sum(target*pred, axis=-1))
     return loss
 
-label = np.load('data/CIFAR100_x32/test_labels.npy')
+label = np.load('data/CIFAR10_x32/test_labels.npy')
 print(f'label shape: {label.shape}')
 
-postfix = ['endd_2025', 'endd_2027', 'endd_2028', 'kd_2025', 'kd_2026', 'kd_2027']
+postfix = ['fm_c10_fmce_lr3e-4_ce100']
+# postfix = ['endd_2025', 'endd_2027', 'endd_2028', 'kd_2025', 'kd_2026', 'kd_2027']
 for p in postfix:
-    logit = np.load(f'logits/CIFAR100_x32_{p}.npy')
+    logit = np.load(f'logits/CIFAR10_x32_{p}.npy')
+    print(f'logit shape: {logit.shape}')
+    
+    logit = jax.nn.softmax(logit).mean(1)
+    logit = jnp.log(logit)
     print(f'logit shape: {logit.shape}')
 
     print(f'NLL at {p}: {ce_loss(logit, label)}')

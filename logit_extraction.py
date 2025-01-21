@@ -204,10 +204,10 @@ def get_resnet(config, return_emb=False):
 
 
 def get_scorenet(config):
-    config.hidden_size = 256
+    config.hidden_size = 512 # ResNet32x4
     config.time_embed_dim = 32
     config.num_blocks = 4
-    config.num_classes = 10
+    config.num_classes = 100 # ResNet32x4
     config.droprate = 0.
     config.time_scale = 1000.
 
@@ -484,7 +484,7 @@ def launch(config):
     # init settings
     # ------------------------------------------------------------------------
     cross_replica_mean = jax.pmap(lambda x: jax.lax.pmean(x, 'x'), 'x')
-    state = params
+    # state = params
     state = jax_utils.replicate(state)
         
     data_loader = dataloaders["dataloader"]()
@@ -496,11 +496,11 @@ def launch(config):
         batch = extract(batch, state, jax_utils.replicate(batch_rng))
         # save logits
         logits = batch["logitsA"]
-        extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
-        # extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
+        # extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+        extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
     extracted_logits = jnp.stack(extracted_logits)
-    extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
-    # extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
+    # extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
+    extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
     
     print(f'Output shape: {extracted_logits.shape}')
     np.save(f'{config.save_path}{config.data_name}_{config.mode}_{config.name}.npy',
