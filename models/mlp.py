@@ -54,7 +54,7 @@ class Mlp(nn.Module):
             t = nn.silu(t)
             shift_mlp, scale_mlp, gate_mlp = jnp.split(t, 3, axis=-1)
             
-            x = nn.LayerNorm(use_bias=False, use_scale=False)(x)
+            x = nn.LayerNorm(use_bias=True, use_scale=True)(x)
             x = x * (1 + scale_mlp) + shift_mlp
             x = nn.Dense(
                     features=self.hidden_size,

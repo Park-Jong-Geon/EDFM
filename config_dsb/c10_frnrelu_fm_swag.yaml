@@ -19,7 +19,7 @@ time_scale: 1000.
 
 optim_bs: 256
 optim_ne: 1000
-optim_lr: 0.001 #0.00005
+optim_lr: 0.0001 #0.00005
 optim_base: sgd #adam
 optim_weight_decay: 0.0005 #0
 optim_momentum: 0.9
@@ -28,7 +28,7 @@ ema_decay: 0. #0.999
 mse_power: 2
 
 var: 4
-ce_lambda: 500
+ce_lambda: 200
 mid_step: 0.8
 
 train_timestep_truncation: 0.001
@@ -37,6 +37,6 @@ sample_timestep_alpha: 0.5
 
 mixup_alpha: 0.4
 
-num_teachers: 30
+num_teachers: 1 #30
 num_ensembles: 300
 num_models: 100
