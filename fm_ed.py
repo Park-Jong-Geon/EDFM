@@ -128,8 +128,6 @@ def get_scorenet(config):
         num_classes=config.num_classes,
         droprate=config.droprate,
         time_scale=config.time_scale,
-        logit_mean=config.logit_mean,
-        logit_std=config.logit_std,
     )
     return score_func
 
@@ -144,6 +142,8 @@ def build_dbn(config):
         num_classes=config.num_classes,
         eps=config.train_timestep_truncation,
         train_timestep_alpha=config.train_timestep_alpha,
+        logit_mean=config.logit_mean,
+        logit_std=config.logit_std,
     )
     return dbn
 
