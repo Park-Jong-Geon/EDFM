@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
-from typing import Sequence
+from typing import Sequence, Any
 import functools
 
 class FlowMatching(nn.Module):
@@ -11,6 +11,8 @@ class FlowMatching(nn.Module):
     num_classes: int
     eps: float
     train_timestep_alpha: float
+    logit_mean: Any
+    logit_std: Any
 
     def setup(self):
         self.resnet = self.res_net()
@@ -28,6 +30,8 @@ class FlowMatching(nn.Module):
         return eps, u_t, x_t, t
 
     def forward(self, rng, l_label, c):
+        l_label = (l_label - self.logit_mean[None, ...]) / self.logit_std[None, ...]
+
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
         u = jax.random.uniform(t_rng, (l_label.shape[0],),)

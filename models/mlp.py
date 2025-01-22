@@ -38,13 +38,24 @@ class Mlp(nn.Module):
     droprate: float
     time_scale: float
     dtype: Any = jnp.float32
+    s_data: float = 1.
+    s_noise: float = 4.
     
     @nn.compact
     def __call__(self, x, z, t, **kwargs):
+        x_copy = x
+        
+        c_in = 1 / jnp.sqrt(t**2 * self.s_data**2 + (1-t)**2 * self.s_noise**2)
+        c_skip = (t * self.s_data**2 - (1-t) * self.s_noise**2) * c_in**2
+        c_out = self.s_data * self.s_noise * c_in
+
+        x *= c_in[..., None]
+        t = jnp.log(self.time_scale * (1-t) + 1e-12) / 4
+        
         z = jnp.mean(z, axis=(1, 2))
         x = jnp.concatenate([x, z], axis=-1)
 
-        t_skip = timestep_embedding(self.time_scale * t, self.time_embed_dim)
+        t_skip = timestep_embedding(t, self.time_embed_dim)
 
         # MLP Residual.
         for i in range(self.num_blocks):
@@ -54,7 +65,7 @@ class Mlp(nn.Module):
             t = nn.silu(t)
             shift_mlp, scale_mlp, gate_mlp = jnp.split(t, 3, axis=-1)
             
-            x = nn.LayerNorm(use_bias=True, use_scale=True)(x)
+            x = nn.LayerNorm(use_bias=False, use_scale=False)(x)
             x = x * (1 + scale_mlp) + shift_mlp
             x = nn.Dense(
                     features=self.hidden_size,
@@ -72,4 +83,5 @@ class Mlp(nn.Module):
                 kernel_init=nn.initializers.xavier_uniform(),
                 bias_init=nn.initializers.normal(stddev=1e-6)
             )(x)
-        return x
+        
+        return c_skip[..., None] * x_copy + c_out[..., None] * x

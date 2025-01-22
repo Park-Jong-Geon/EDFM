@@ -128,6 +128,8 @@ def get_scorenet(config):
         num_classes=config.num_classes,
         droprate=config.droprate,
         time_scale=config.time_scale,
+        logit_mean=config.logit_mean,
+        logit_std=config.logit_std,
     )
     return score_func
 
@@ -169,7 +171,9 @@ def fm_sample(score, l0, z, config, num_models):
 
     eps = score(val, z, t=mid)
     val += batch_mul(one-mid, eps)
-        
+
+    val = jnp.array(config.logit_mean)[None, ...] + jnp.array(config.logit_std)[None, ...] * val
+
     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
     logits = val.reshape(-1, num_models, config.num_classes)
     return prob, logits
