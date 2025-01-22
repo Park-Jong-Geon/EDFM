@@ -238,39 +238,78 @@ def build_dbn(config):
         num_classes=config.num_classes,
         eps=config.train_timestep_truncation,
         train_timestep_alpha=config.train_timestep_alpha,
+        logit_mean = None,
+        logit_std = None,
     )
     return dbn
 
 
-# def fm_sample(score, l0, z, c, config, steps, num_models):
-#     pass
 def fm_sample(score, l0, z, config, num_models):
-    config.mid_step = 0.8
-    
     batch_size = l0.shape[0]
-    
-    zero = jnp.array([0.])
-    zero = jnp.tile(zero, [batch_size])
+    steps = 200
+    timesteps = jnp.linspace(0., 1., steps+1)
+    # a = config.sample_timestep_alpha
+    # timesteps = jnp.array([(1-a**i)/(1-a**steps) for i in range(steps+1)])
 
-    mid = jnp.array([config.mid_step])
-    mid = jnp.tile(mid, [batch_size])
+    @jax.jit
+    def body_fn(n, l_n):
+        current_t = jnp.array([timesteps[n]])
+        current_t = jnp.tile(current_t, [batch_size])
 
-    one = jnp.array([1.])
-    one = jnp.tile(one, [batch_size])
+        next_t = jnp.array([timesteps[n+1]])
+        next_t = jnp.tile(next_t, [batch_size])
+
+        eps = score(l_n, z, t=current_t)
+        euler_l_n = l_n + batch_mul(next_t-current_t, eps)
+        # return euler_l_n
+        
+        eps2 = score(euler_l_n, z, t=next_t)
+        heun_l_n = l_n + batch_mul((next_t-current_t)/2, eps+eps2)
+        
+        return heun_l_n
 
     val = l0
-    eps = score(val, z, t=zero)
-    euler = val + batch_mul(mid-zero, eps)
-    
-    eps2 = score(euler, z, t=mid)
-    val += batch_mul((mid-zero)/2, eps+eps2)
+    for i in range(0, steps-1):
+        val = body_fn(i, val)
+    current_t = jnp.array([timesteps[steps-1]])
+    current_t = jnp.tile(current_t, [batch_size])
 
-    eps = score(val, z, t=mid)
-    val += batch_mul(one-mid, eps)
+    next_t = jnp.array([timesteps[steps]])
+    next_t = jnp.tile(next_t, [batch_size])
+
+    eps = score(val, z, t=current_t)
+    val += batch_mul(next_t-current_t, eps)
         
     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
     logits = val.reshape(-1, num_models, config.num_classes)
     return prob, logits
+# def fm_sample(score, l0, z, config, num_models):
+#     config.mid_step = 0.8
+    
+#     batch_size = l0.shape[0]
+    
+#     zero = jnp.array([0.])
+#     zero = jnp.tile(zero, [batch_size])
+
+#     mid = jnp.array([config.mid_step])
+#     mid = jnp.tile(mid, [batch_size])
+
+#     one = jnp.array([1.])
+#     one = jnp.tile(one, [batch_size])
+
+#     val = l0
+#     eps = score(val, z, t=zero)
+#     euler = val + batch_mul(mid-zero, eps)
+    
+#     eps2 = score(euler, z, t=mid)
+#     val += batch_mul((mid-zero)/2, eps+eps2)
+
+#     eps = score(val, z, t=mid)
+#     val += batch_mul(one-mid, eps)
+        
+#     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
+#     logits = val.reshape(-1, num_models, config.num_classes)
+#     return prob, logits
 
 
 def launch(config):
