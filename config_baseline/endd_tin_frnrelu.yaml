@@ -25,3 +25,14 @@ t_offset: 1
 eps: 1.0e-8
 
 num_teachers: 30
+swag_ckpt_dir:
+  ['checkpoints/tinyimagenet200/sgd_swag_2/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_5/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_11/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_17/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_23/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_31/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_41/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_47/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_59/checkpoint_1000',
+  'checkpoints/tinyimagenet200/sgd_swag_67/checkpoint_1000',]
