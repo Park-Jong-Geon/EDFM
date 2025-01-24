@@ -124,18 +124,37 @@ class ClsUnet(nn.Module):
                                       bias_init=jax.nn.initializers.zeros)
     droprate: float = 0
     dropout: nn.Module = nn.Dropout
+    # cfgs: Sequence[Tuple[int, int, int, int]] = (
+    #     # e, c, n, s
+    #     (1, 32, 1, 1),
+    #     (3, 48, 2, 2),
+    #     (3, 64, 3, 2),
+    #     (3, 96, 2, 1),
+    #     (3, 128, 2, 1),
+    # )
     cfgs: Sequence[Tuple[int, int, int, int]] = (
         # e, c, n, s
-        (1, 32, 1, 1),
-        (3, 48, 2, 2),
-        (3, 64, 3, 2),
-        (3, 96, 2, 1),
-        (3, 128, 2, 1),
+        (1, 64, 1, 1),
+        (4, 96, 2, 2),
+        (4, 128, 3, 2),
+        (4, 192, 2, 1),
+        (4, 256, 2, 1),
     )
-    new_dim: int = 16
+    time_scale: float = 1000.
+    s_data: float = 1.
+    s_noise: float = 4.
 
     @nn.compact
     def __call__(self, p, x, t, **kwargs):
+        p_copy = p
+        
+        c_in = 1 / jnp.sqrt(t**2 * self.s_data**2 + (1-t)**2 * self.s_noise**2)
+        c_skip = (t * self.s_data**2 - (1-t) * self.s_noise**2) * c_in**2
+        c_out = self.s_data * self.s_noise * c_in
+
+        p *= c_in[..., None]
+        t = jnp.log(self.time_scale * (1-t) + 1e-12) / 4
+
         norm_kwargs = to_norm_kwargs(self.norm, kwargs)
         
         # Encode t
@@ -199,4 +218,6 @@ class ClsUnet(nn.Module):
 
         z = jnp.mean(z, axis=(1, 2))
         z = self.fc(features=self.num_classes)(z)
+
+        z = c_skip[..., None] * p_copy + c_out[..., None] * z
         return z
