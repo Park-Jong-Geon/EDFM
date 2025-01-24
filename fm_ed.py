@@ -227,7 +227,7 @@ def fm_sample(score, l0, z, config, num_models):
 
 
 def launch(config):
-    kd_param, _, _, _ = load_saved('checkpoints/baseline/kd_c10_2025/checkpoint_985')
+    kd_param, _, _, _ = load_saved(config.kd_ckpt)
     
     # ------------------------------------------------------------------------
     # load teacher for distillation

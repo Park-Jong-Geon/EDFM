@@ -41,6 +41,8 @@ num_teachers: 1 #30
 num_ensembles: 300
 num_models: 100
 
+kd_ckpt: 'checkpoints/baseline/kd_c10_2025/checkpoint_985'
+
 logit_mean: [0.03462333, -0.3035469 ,  0.02507901,  0.20515367, -0.05333813,
         0.12506045,  0.02851592, -0.01094724, -0.12493297,  0.07655519]
 
