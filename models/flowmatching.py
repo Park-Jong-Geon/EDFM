@@ -30,7 +30,7 @@ class FlowMatching(nn.Module):
         return eps, u_t, x_t, t
 
     def forward(self, rng, l_label, c):
-        l_label = (l_label - jnp.array(self.logit_mean)[None, ...]) / jnp.array(self.logit_std)[None, ...]
+        # l_label = (l_label - jnp.array(self.logit_mean)[None, ...]) / jnp.array(self.logit_std)[None, ...]
 
         # Sample t
         t_rng, n_rng = jax.random.split(rng, 2)
