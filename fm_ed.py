@@ -28,7 +28,7 @@ from giung2.models.layers import FilterResponseNorm
 
 from models.resnet import FlaxResNet
 from models.mlp import Mlp
-from models.twod_unet import ClsUnet
+# from models.twod_unet import ClsUnet
 # from models.mlp_v2 import Mlp
 from models.flowmatching import FlowMatching
 
@@ -120,22 +120,15 @@ def get_resnet(config, return_emb=False):
     return model
 
 
-# def get_scorenet(config):
-#     score_func = partial(
-#         Mlp,        
-#         hidden_size=config.hidden_size,
-#         time_embed_dim=config.time_embed_dim,
-#         num_blocks=config.num_blocks,
-#         num_classes=config.num_classes,
-#         droprate=config.droprate,
-#         time_scale=config.time_scale,
-#     )
-#     return score_func
 def get_scorenet(config):
     score_func = partial(
-        ClsUnet,        
-        num_classes=100,
-        ch=256,
+        Mlp,        
+        hidden_size=config.hidden_size,
+        time_embed_dim=config.time_embed_dim,
+        num_blocks=config.num_blocks,
+        num_classes=config.num_classes,
+        droprate=config.droprate,
+        time_scale=config.time_scale,
     )
     return score_func
 

@@ -53,14 +53,13 @@ class Mlp(nn.Module):
         t = jnp.log(self.time_scale * (1-t) + 1e-12) / 4
         
         z = jnp.mean(z, axis=(1, 2))
+        x = jnp.concatenate([x, z], axis=-1)
 
         t_skip = timestep_embedding(t, self.time_embed_dim)
 
         # MLP Residual.
         for i in range(self.num_blocks):
             x_skip = x
-            
-            x = jnp.concatenate([x, z], axis=-1)
             
             t = nn.Dense(3 * x.shape[-1], kernel_init=nn.initializers.constant(0.))(t_skip)
             t = nn.silu(t)
