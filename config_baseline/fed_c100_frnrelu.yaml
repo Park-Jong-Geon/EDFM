@@ -8,7 +8,7 @@ model_blocks: null
 model_style: FRN-Swish
 model_name: FlaxResNet
 
-optim_bs: 8 #256
+optim_bs: 64 #256
 optim_ne: 1000
 optim_lr: 0.001
 optim_weight_decay: 0.

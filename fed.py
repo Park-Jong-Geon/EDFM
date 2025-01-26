@@ -159,7 +159,7 @@ def launch(config):
         b_and_s[epoch*trn_steps_per_epoch] = config.optim_boundaries_and_scales[epoch]
     scheduler = optax.piecewise_constant_schedule(
         init_value=config.optim_lr,
-        # boundaries_and_scales=config.optim_boundaries_and_scales,
+        boundaries_and_scales=b_and_s,
     )
     if config.optim == "sgd":
         optimizer = optax.sgd(
@@ -267,6 +267,8 @@ def launch(config):
         
         s_logits, new_model_state = pred(params, state, image, noise, state.rng, train)
         s_probs = jax.nn.softmax(s_logits)
+        s_probs = s_probs.reshape(-1, config.num_teachers, s_probs.shape[-1])
+        s_probs = s_probs.swapaxes(0, 1)
         s_probs = s_probs.reshape(config.num_teachers, -1)
         
         t_logits = batch["logitsA"]
@@ -358,15 +360,15 @@ def launch(config):
         metrics[f"nll_1"] = nll_1
         metrics[f"cnll_1"] = cnll_1
         
-        ens_logits = batch["logitsA"].swapaxes(0, 1)
-        ens_var = pred_var = 0
-        for e, p in zip(ens_logits, pred_logits[0:config.num_teachers]):
-            ens_cov = jnp.cov(e, rowvar=False)
-            pred_cov = jnp.cov(p, rowvar=False)
-            ens_var += jnp.trace(jnp.abs(ens_cov))
-            pred_var += jnp.trace(jnp.abs(pred_cov))
-        metrics[f"ens_var"] = ens_var
-        metrics[f"pred_var"] = pred_var
+        # ens_logits = batch["logitsA"].swapaxes(0, 1)
+        # ens_var = pred_var = 0
+        # for e, p in zip(ens_logits, pred_logits[0:config.num_teachers]):
+        #     ens_cov = jnp.cov(e, rowvar=False)
+        #     pred_cov = jnp.cov(p, rowvar=False)
+        #     ens_var += jnp.trace(jnp.abs(ens_cov))
+        #     pred_var += jnp.trace(jnp.abs(pred_cov))
+        # metrics[f"ens_var"] = ens_var
+        # metrics[f"pred_var"] = pred_var
         
         return metrics
     
