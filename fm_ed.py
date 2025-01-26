@@ -143,8 +143,6 @@ def build_dbn(config):
         num_classes=config.num_classes,
         eps=config.train_timestep_truncation,
         train_timestep_alpha=config.train_timestep_alpha,
-        logit_mean=config.logit_mean,
-        logit_std=config.logit_std,
     )
     return dbn
 
@@ -185,8 +183,6 @@ def fm_sample(score, l0, z, config, num_models):
     eps = score(val, z, t=current_t)
     val += batch_mul(next_t-current_t, eps)
 
-    # val = jnp.array(config.logit_mean)[None, ...] + jnp.array(config.logit_std)[None, ...] * val
-
     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
     logits = val.reshape(-1, num_models, config.num_classes)
     return prob, logits
@@ -211,8 +207,6 @@ def fm_sample(score, l0, z, config, num_models):
 
 #     eps = score(val, z, t=mid)
 #     val += batch_mul(one-mid, eps)
-
-#     # val = jnp.array(config.logit_mean)[None, ...] + jnp.array(config.logit_std)[None, ...] * val
 
 #     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
 #     logits = val.reshape(-1, num_models, config.num_classes)
@@ -255,7 +249,7 @@ def launch(config):
     # ------------------------------------------------------------------------
     swag_state_list = []
     for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-        ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]
+        ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100', 'cinic10_nocifar': 'c100'}[config.data_name]
         ckpt = f'checkpoints_teacher/{ckpt}/{s}.pickle'
         with open(ckpt, 'rb') as fp:
             ckpt = pickle.load(fp)
@@ -680,7 +674,7 @@ def launch(config):
     state = jax_utils.replicate(state)
 
     wandb.init(
-        project="dbn",
+        project="fmed",
         config=vars(config),
         mode="disabled" if config.nowandb else "online"
     )

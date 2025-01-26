@@ -197,6 +197,29 @@ def build_dataloaders(config, corrupted=False):
     tst_labels = np.load(os.path.join(
         config.data_root, f'{config.data_name}/test_labels.npy'))
 
+    if config.data_name == 'cinic10_nocifar':
+        val_images = np.load(os.path.join(
+            config.data_root, f'{config.data_name}/valid_images.npy'))
+        c100_trn_images = np.load(os.path.join(
+            config.data_root, f'CIFAR100_x32/train_images.npy'))
+        c100_val_images = c100_trn_images[40960:]
+        cinic_images = np.concatenate([trn_images, val_images, tst_images], axis=0)
+        
+        trn_images = np.concatenate([c100_val_images, cinic_images[0:40960-9040]], axis=0)
+        
+        # Dummy data
+        trn_labels = np.ones([len(trn_images),])
+        val_images = trn_images
+        val_labels = np.ones([len(val_images),])
+        
+        tst_images = np.load(os.path.join(
+            config.data_root, f'CIFAR100_x32/test_images.npy'))
+        tst_labels = np.load(os.path.join(
+            config.data_root, f'CIFAR100_x32/test_labels.npy'))
+
+        image_shape = (1, 32, 32, 3)
+        num_classes = 100
+
     if config.data_name == 'Birds200_x32':
         # 5120 /   874 /  5794
         trn_images, val_images = trn_images[: 5120], trn_images[5120:]

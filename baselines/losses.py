@@ -230,3 +230,56 @@ class ProxyEnDD(nn.Module):
 
         loss = jnp.mean(recon_term - prior_term)
         return loss
+      
+      
+class MMD:
+    def __init__(self, bandwidth_range=[2.0], kernel='multiscale', return_matrix=False):
+        self.bandwidth_range = bandwidth_range
+        self.kernel = kernel
+        self.return_matrix = return_matrix
+
+    def __call__(self, x, y):
+        """
+        Empirical maximum mean discrepancy. The lower the result, the more evidence that distributions are the same.
+
+        Args:
+            x: first sample, distribution P
+            y: second sample, distribution Q
+            kernel: kernel type such as "multiscale" or "rbf"
+        """
+        xx = jnp.dot(x, x.T)
+        yy = jnp.dot(y, y.T)
+        zz = jnp.dot(x, y.T)
+        
+        rx = jnp.expand_dims(jnp.diag(xx), axis=0).repeat(xx.shape[0], axis=0)
+        ry = jnp.expand_dims(jnp.diag(yy), axis=0).repeat(yy.shape[0], axis=0)
+        
+        dxx = rx.T + rx - 2. * xx  # Used for A in (1)
+        dyy = ry.T + ry - 2. * yy  # Used for B in (1)
+        dxy = rx.T + ry - 2. * zz  # Used for C in (1)
+        
+        XX = jnp.zeros_like(xx)
+        YY = jnp.zeros_like(xx)
+        XY = jnp.zeros_like(xx)
+        
+        if self.kernel == "multiscale":
+            for a in self.bandwidth_range:
+                XX += a**2 * (a**2 + dxx)**-1
+                YY += a**2 * (a**2 + dyy)**-1
+                XY += a**2 * (a**2 + dxy)**-1
+        
+        elif self.kernel == "rbf":
+            for a in self.bandwidth_range:
+                XX += jnp.exp(-0.5 * dxx / a)
+                YY += jnp.exp(-0.5 * dyy / a)
+                XY += jnp.exp(-0.5 * dxy / a)
+        
+        elif self.kernel == 'linear':
+            XX += xx
+            YY += yy
+            XY += zz
+        
+        if self.return_matrix:
+            return jnp.mean(XX + YY - 2. * XY), XX, XY, YY
+        
+        return jnp.mean(XX + YY - 2. * XY)
