@@ -1,4 +1,6 @@
-data_name: CIFAR10_x32
+data_name: cinic10_nocifar #CIFAR10_x32
+data_subname: c10
+
 model_depth: 32
 model_width: 2
 model_planes: 16
@@ -28,23 +30,17 @@ ema_decay: 0. #0.999
 mse_power: 2
 
 var: 4
-ce_lambda: 200
+ce_lambda: 0. #200
 mid_step: 0.8
 
 train_timestep_truncation: 0.001
 train_timestep_alpha: 3
 sample_timestep_alpha: 0.5
 
-mixup_alpha: 0.4
+mixup_alpha: 0. #0.4
 
 num_teachers: 1 #30
 num_ensembles: 300
 num_models: 100
 
 kd_ckpt: 'checkpoints/baseline/kd_c10_2025/checkpoint_985'
-
-logit_mean: [0.03462333, -0.3035469 ,  0.02507901,  0.20515367, -0.05333813,
-        0.12506045,  0.02851592, -0.01094724, -0.12493297,  0.07655519]
-
-logit_std: [2.5176868, 2.77664  , 2.4708471, 2.4065125, 2.559693 , 2.6099434,
-       2.6222072, 2.6297245, 2.5740516, 2.6996565]

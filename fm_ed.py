@@ -247,10 +247,10 @@ def launch(config):
     # ------------------------------------------------------------------------
     # prepare teachers for distillation
     # ------------------------------------------------------------------------
+    # ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]    
     swag_state_list = []
     for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-        ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100', 'cinic10_nocifar': 'c100'}[config.data_name]
-        ckpt = f'checkpoints_teacher/{ckpt}/{s}.pickle'
+        ckpt = f'checkpoints_teacher/{config.data_subname}/{s}.pickle'
         with open(ckpt, 'rb') as fp:
             ckpt = pickle.load(fp)
             swag_state = ckpt['swag_state']
