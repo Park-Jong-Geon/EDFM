@@ -159,7 +159,7 @@ def launch(config):
         b_and_s[epoch*trn_steps_per_epoch] = config.optim_boundaries_and_scales[epoch]
     scheduler = optax.piecewise_constant_schedule(
         init_value=config.optim_lr,
-        boundaries_and_scales=config.optim_boundaries_and_scales,
+        # boundaries_and_scales=config.optim_boundaries_and_scales,
     )
     if config.optim == "sgd":
         optimizer = optax.sgd(
@@ -449,7 +449,7 @@ def launch(config):
             state, metrics = step_trn(state, batch)
             trn_metric.append(metrics)
         trn_summarized = summarize_metrics(trn_metric, "trn")
-        trn_summarized['lr'] = scheduler(state.step)
+        trn_summarized['lr'] = scheduler(jax_utils.unreplicate(state.step))
         wl.log(trn_summarized)
 
         if state.batch_stats is not None:

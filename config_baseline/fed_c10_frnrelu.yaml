@@ -8,7 +8,7 @@ model_blocks: null
 model_style: FRN-Swish
 model_name: FlaxResNet
 
-optim_bs: 256
+optim_bs: 16 #256
 optim_ne: 1000
 optim_lr: 0.1
 optim_weight_decay: 0.
@@ -22,3 +22,4 @@ kernel: rbf
 bandwidth_range: [2, 10, 20, 50]
 
 num_teachers: 30
+num_ensembles: 300

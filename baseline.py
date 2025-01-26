@@ -349,7 +349,7 @@ def launch(config):
             state, metrics = step_trn(state, batch)
             trn_metric.append(metrics)
         trn_summarized = summarize_metrics(trn_metric, "trn")
-        trn_summarized['lr'] = scheduler(state.step)
+        trn_summarized['lr'] = scheduler(jax_utils.unreplicate(state.step))
         wl.log(trn_summarized)
 
         if state.batch_stats is not None:
