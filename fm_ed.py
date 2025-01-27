@@ -13,6 +13,8 @@ from collections import OrderedDict, namedtuple
 from functools import partial
 from tqdm import tqdm
 
+import tensorflow as tf
+
 import jax
 import jax.numpy as jnp
 import flax
@@ -36,6 +38,7 @@ from utils import batch_mul, get_config, WandbLogger
 
 from swag import sample_swag_diag
 # from metrics.wasserstein2 import wasserstein_2_distance
+import image_processing
 
 random.seed(0)
 
@@ -701,6 +704,29 @@ def launch(config):
         del summarized[f"{key}/count"]
         return summarized
 
+    # RandAugment
+    augment_1 = image_processing.RandAugment(
+        num_layers=2, magnitude=9.0,
+        cutout_const=16.0, translate_const=8.0,
+        magnitude_std=0.5, prob_to_apply=0.5)
+    
+    augment_2 = jax.pmap(jax.vmap(
+        image_processing.TransformChain([
+            image_processing.RandomCropTransform(size=32, padding=4),
+            image_processing.RandomHFlipTransform(prob=0.5)]),
+                         axis_name="batch"))
+    
+    def augment_fn(rng, img):
+        aug_img = augment_1.distort(
+            tf.convert_to_tensor(img.reshape(-1, *img.shape[-3:]))
+        )
+        aug_img = jnp.array(aug_img).reshape(img.shape)
+        aug_img = augment_2(
+            jax.vmap(lambda r: jax.random.split(r, aug_img.shape[1]))(rng),
+            aug_img,
+        )
+        return aug_img
+
     for epoch_idx in tqdm(range(config.optim_ne)):
         epoch_rng = jax.random.fold_in(sub_rng, epoch_idx)
         train_rng, valid_rng, test_rng = jax.random.split(epoch_rng, 3)
@@ -714,6 +740,10 @@ def launch(config):
         for batch_idx, batch in enumerate(train_loader):
             batch_rng = jax.random.fold_in(train_rng, batch_idx)
             state = state.replace(rng=jax_utils.replicate(batch_rng))
+            # RandAug + Mixup
+            batch["images"] = augment_fn(jax_utils.replicate(batch_rng),
+                                         (255.0*batch["images"]).astype(jnp.uint8))
+            batch["images"] /= 255.0
             if config.mixup_alpha > 0:
                 batch = step_mixup(state, batch)
             batch = step_label(state, batch)
@@ -863,8 +893,8 @@ def main():
     
     parser.add_argument('--data_root', default='./data/', type=str,
                         help='root directory containing datasets (default: ./data/)')
-    parser.add_argument('--data_augmentation', default='standard', type=str,
-                        choices=['standard',])
+    parser.add_argument('--data_augmentation', default='none', type=str,
+                        choices=['standard', 'none',])
     parser.add_argument('--data_proportional', default=1.0, type=float,
                         help='use the proportional train split if specified (default: 1.0)')
     parser.add_argument("--config", default=None, type=str)

@@ -1,5 +1,6 @@
-data_name: cinic10_nocifar #CIFAR10_x32
+data_name: CIFAR10_x32 #cinic10_nocifar
 data_subname: c10
+data_augmentation: none
 
 model_depth: 32
 model_width: 2

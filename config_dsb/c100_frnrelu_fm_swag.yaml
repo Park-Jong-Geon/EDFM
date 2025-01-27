@@ -1,5 +1,6 @@
-data_name: cinic10_nocifar #CIFAR100_x32
+data_name: CIFAR100_x32 #cinic10_nocifar
 data_subname: c100
+data_augmentation: none
 
 model_depth: 32
 model_width: 4
@@ -37,7 +38,7 @@ train_timestep_truncation: 0.001
 train_timestep_alpha: 3
 sample_timestep_alpha: 0.5
 
-mixup_alpha: 0. #0.4
+mixup_alpha: 0.4
 
 num_teachers: 1 #30
 num_ensembles: 300
