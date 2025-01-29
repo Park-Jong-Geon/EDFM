@@ -471,13 +471,14 @@ def launch(config):
         for batch_idx, batch in enumerate(trn_loader):
             batch_rng = jax.random.fold_in(epoch_rng, batch_idx)
             state = state.replace(rng=jax_utils.replicate(batch_rng))
-            if config.mixup_alpha > 0:
-                batch = step_mixup(state, batch)
-                
+            
             # RandAug + Mixup
             batch["images"] = augment_fn(jax_utils.replicate(batch_rng),
                                          (255.0*batch["images"]).astype(jnp.uint8))
             batch["images"] /= 255.0
+            
+            if config.mixup_alpha > 0:
+                batch = step_mixup(state, batch)
                 
             batch = step_label(state, batch)
             state, metrics = step_trn(state, batch)
