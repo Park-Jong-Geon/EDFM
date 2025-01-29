@@ -38,7 +38,7 @@ train_timestep_truncation: 0.001
 train_timestep_alpha: 3
 sample_timestep_alpha: 0.5
 
-mixup_alpha: 0. #0.4
+mixup_alpha: 0.4
 
 num_teachers: 1 #30
 num_ensembles: 300
