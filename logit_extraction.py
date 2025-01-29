@@ -156,11 +156,11 @@ def get_resnet(config, return_emb=False):
     config.model_name = 'FlaxResNet'
     config.model_style = 'FRN-Swish'
     config.model_depth = 32
-    config.model_width = 2 #ResNet32x4
+    config.model_width = 4 #ResNet32x4
     config.model_planes = 16
     config.model_blocks = None
     config.dtype = jnp.float32
-    config.num_classes = 10 #ResNet32x4
+    config.num_classes = 100 #ResNet32x4
     config.first_conv = None
     config.first_pool = None
     config.model_nobias = None
@@ -204,10 +204,10 @@ def get_resnet(config, return_emb=False):
 
 
 def get_scorenet(config):
-    config.hidden_size = 256 # ResNet32x4
+    config.hidden_size = 512 # ResNet32x4
     config.time_embed_dim = 32
     config.num_blocks = 4
-    config.num_classes = 10 # ResNet32x4
+    config.num_classes = 100 # ResNet32x4
     config.droprate = 0.
     config.time_scale = 1000.
 
@@ -242,68 +242,42 @@ def build_dbn(config):
     return dbn
 
 
-# def fm_sample(score, l0, z, config, num_models):
-#     batch_size = l0.shape[0]
-#     steps = 200
-#     timesteps = jnp.linspace(0., 1., steps+1)
-#     # a = config.sample_timestep_alpha
-#     # timesteps = jnp.array([(1-a**i)/(1-a**steps) for i in range(steps+1)])
-
-#     @jax.jit
-#     def body_fn(n, l_n):
-#         current_t = jnp.array([timesteps[n]])
-#         current_t = jnp.tile(current_t, [batch_size])
-
-#         next_t = jnp.array([timesteps[n+1]])
-#         next_t = jnp.tile(next_t, [batch_size])
-
-#         eps = score(l_n, z, t=current_t)
-#         euler_l_n = l_n + batch_mul(next_t-current_t, eps)
-#         # return euler_l_n
-        
-#         eps2 = score(euler_l_n, z, t=next_t)
-#         heun_l_n = l_n + batch_mul((next_t-current_t)/2, eps+eps2)
-        
-#         return heun_l_n
-
-#     val = l0
-#     for i in range(0, steps-1):
-#         val = body_fn(i, val)
-#     current_t = jnp.array([timesteps[steps-1]])
-#     current_t = jnp.tile(current_t, [batch_size])
-
-#     next_t = jnp.array([timesteps[steps]])
-#     next_t = jnp.tile(next_t, [batch_size])
-
-#     eps = score(val, z, t=current_t)
-#     val += batch_mul(next_t-current_t, eps)
-        
-#     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
-#     logits = val.reshape(-1, num_models, config.num_classes)
-#     return prob, logits
 def fm_sample(score, l0, z, config, num_models):
-    config.mid_step = 0.8
-    
     batch_size = l0.shape[0]
-    
-    zero = jnp.array([0.])
-    zero = jnp.tile(zero, [batch_size])
+    # timesteps = jnp.array([0., 0.8, 1.])
+    # timesteps = jnp.array([0., 0.6, 0.999, 1.])
+    # timesteps = jnp.array([0., 0.4, 0.7, 0.999, 1.])
+    timesteps = jnp.array([0., 0.2, 0.4, 0.6, 0.8, 0.999, 1.])
+    steps = len(timesteps)-1
 
-    mid = jnp.array([config.mid_step])
-    mid = jnp.tile(mid, [batch_size])
+    @jax.jit
+    def body_fn(n, l_n):
+        current_t = jnp.array([timesteps[n]])
+        current_t = jnp.tile(current_t, [batch_size])
 
-    one = jnp.array([1.])
-    one = jnp.tile(one, [batch_size])
+        next_t = jnp.array([timesteps[n+1]])
+        next_t = jnp.tile(next_t, [batch_size])
+
+        eps = score(l_n, z, t=current_t)
+        euler_l_n = l_n + batch_mul(next_t-current_t, eps)
+        # return euler_l_n
+        
+        eps2 = score(euler_l_n, z, t=next_t)
+        heun_l_n = l_n + batch_mul((next_t-current_t)/2, eps+eps2)
+        
+        return heun_l_n
 
     val = l0
-    eps = score(val, z, t=zero)
-    euler = val + batch_mul(mid-zero, eps)
-    
-    eps2 = score(euler, z, t=mid)
-    val += batch_mul((mid-zero)/2, eps+eps2)
+    for i in range(0, steps-1):
+        val = body_fn(i, val)
+    current_t = jnp.array([timesteps[steps-1]])
+    current_t = jnp.tile(current_t, [batch_size])
 
-    eps = score(val, z, t=mid)
-    val += batch_mul(one-mid, eps)
+    next_t = jnp.array([timesteps[steps]])
+    next_t = jnp.tile(next_t, [batch_size])
+
+    eps = score(val, z, t=current_t)
+    val += batch_mul(next_t-current_t, eps)
         
     prob = jax.nn.softmax(val).reshape(-1, num_models, config.num_classes).mean(1)
     logits = val.reshape(-1, num_models, config.num_classes)
@@ -430,7 +404,7 @@ def launch(config):
         
         swag_state_list = []
         for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-            ckpt = f'checkpoints_teacher/c10/{s}.pickle' #ResNet32x4
+            ckpt = f'checkpoints_teacher/c100/{s}.pickle' #ResNet32x4
             with open(ckpt, 'rb') as fp:
                 ckpt = pickle.load(fp)
                 swag_state = ckpt['swag_state']
@@ -534,6 +508,7 @@ def launch(config):
         # save logits
         logits = batch["logitsA"]
         # extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+        logits = jax.device_put(logits, device=jax.devices("cpu")[0])
         extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
     extracted_logits = jnp.stack(extracted_logits)
     # extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
@@ -555,7 +530,7 @@ def main():
     parser.add_argument('--seed', default=2025, type=int)
     parser.add_argument('--data_root', default='./data/', type=str,
                         help='root directory containing datasets (default: ./data/)')
-    parser.add_argument('--batch_size', default=100, type=int)
+    parser.add_argument('--batch_size', default=200, type=int)
     parser.add_argument('--image_shape', default=(1, 32, 32, 3), type=tuple)
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--num_samples', default=30, type=int)
