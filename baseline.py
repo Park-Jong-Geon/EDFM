@@ -20,6 +20,8 @@ from flax import jax_utils
 import orbax
 import optax
 
+import tensorflow as tf
+
 from data.build import build_dataloaders
 from giung2.metrics import evaluate_acc, evaluate_nll, get_optimal_temperature, temperature_scaling
 from giung2.models.layers import FilterResponseNorm
@@ -29,6 +31,7 @@ from utils import WandbLogger
 
 from swag import sample_swag_diag
 from baselines.losses import KD, ProxyEnDD
+import image_processing
 
 random.seed(0)
 
@@ -151,24 +154,24 @@ def launch(config):
     )
 
     # prepare teachers for distillation
-    # swag_state_list = []
-    # for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-    #     ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]
-    #     ckpt = f'checkpoints_teacher/{ckpt}/{s}.pickle'
-    #     with open(ckpt, 'rb') as fp:
-    #         ckpt = pickle.load(fp)
-    #         swag_state = ckpt['swag_state']
-    #         batch_stats = ckpt['batch_stats']
-    #         image_stats = ckpt['image_stats']
-    #     swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
-    #     swag_state_list.append(swag_state)
-
     swag_state_list = []
-    for swag_ckpt_dir in config.swag_ckpt_dir:
-        resnet_state, _, batch_stats, image_stats = load_resnet(swag_ckpt_dir)
-        d = resnet_state['model']['opt_state']['1']
-        swag_state = namedtuple('SWAGState', d.keys())(*d.values())
+    for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
+        ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]
+        ckpt = f'checkpoints_teacher/{ckpt}/{s}.pickle'
+        with open(ckpt, 'rb') as fp:
+            ckpt = pickle.load(fp)
+            swag_state = ckpt['swag_state']
+            batch_stats = ckpt['batch_stats']
+            image_stats = ckpt['image_stats']
+        swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
         swag_state_list.append(swag_state)
+
+    # swag_state_list = []
+    # for swag_ckpt_dir in config.swag_ckpt_dir:
+    #     resnet_state, _, batch_stats, image_stats = load_resnet(swag_ckpt_dir)
+    #     d = resnet_state['model']['opt_state']['1']
+    #     swag_state = namedtuple('SWAGState', d.keys())(*d.values())
+    #     swag_state_list.append(swag_state)
 
     # forward through resnet
     def pred(params, state, batch, train):
@@ -331,6 +334,29 @@ def launch(config):
         del summarized[f"{key}/cnt"]
         return summarized
 
+    # RandAugment
+    augment_1 = image_processing.RandAugment(
+        num_layers=2, magnitude=9.0,
+        cutout_const=16.0, translate_const=8.0,
+        magnitude_std=0.5, prob_to_apply=0.5)
+    
+    augment_2 = jax.pmap(jax.vmap(
+        image_processing.TransformChain([
+            image_processing.RandomCropTransform(size=32, padding=4),
+            image_processing.RandomHFlipTransform(prob=0.5)]),
+                         axis_name="batch"))
+    
+    def augment_fn(rng, img):
+        aug_img = augment_1.distort(
+            tf.convert_to_tensor(img.reshape(-1, *img.shape[-3:]))
+        )
+        aug_img = jnp.array(aug_img).reshape(img.shape)
+        aug_img = augment_2(
+            jax.vmap(lambda r: jax.random.split(r, aug_img.shape[1]))(rng),
+            aug_img,
+        )
+        return aug_img
+
     for epoch_idx in tqdm(range(config.optim_ne)):
         epoch_rng = jax.random.fold_in(rng, epoch_idx)
 
@@ -345,6 +371,12 @@ def launch(config):
             state = state.replace(rng=jax_utils.replicate(batch_rng))
             if config.mixup_alpha > 0:
                 batch = step_mixup(state, batch)
+
+            # RandAug + Mixup
+            batch["images"] = augment_fn(jax_utils.replicate(batch_rng),
+                                         (255.0*batch["images"]).astype(jnp.uint8))
+            batch["images"] /= 255.0
+
             batch = step_label(state, batch)
             state, metrics = step_trn(state, batch)
             trn_metric.append(metrics)
