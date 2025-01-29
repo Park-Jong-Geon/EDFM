@@ -215,6 +215,20 @@ def fm_sample(score, l0, z, config, num_models):
 #     logits = val.reshape(-1, num_models, config.num_classes)
 #     return prob, logits
 
+def load_resnet(ckpt_dir):
+    ckpt = checkpoints.restore_checkpoint(
+        ckpt_dir=ckpt_dir,
+        target=None
+    )
+    if ckpt.get("model") is not None:
+        params = ckpt["model"]["params"]
+        batch_stats = ckpt["model"].get("batch_stats")
+        image_stats = ckpt["model"].get("image_stats")
+    else:
+        params = ckpt["params"]
+        batch_stats = ckpt.get("batch_stats")
+        image_stats = ckpt.get("image_stats")
+    return ckpt, params, batch_stats, image_stats
 
 def launch(config):
     kd_param, _, _, _ = load_saved(config.kd_ckpt)
@@ -250,16 +264,23 @@ def launch(config):
     # ------------------------------------------------------------------------
     # prepare teachers for distillation
     # ------------------------------------------------------------------------
-    # ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]    
+    # # ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]    
+    # swag_state_list = []
+    # for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
+    #     ckpt = f'checkpoints_teacher/{config.data_subname}/{s}.pickle'
+    #     with open(ckpt, 'rb') as fp:
+    #         ckpt = pickle.load(fp)
+    #         swag_state = ckpt['swag_state']
+    #         batch_stats = ckpt['batch_stats']
+    #         image_stats = ckpt['image_stats']
+    #     swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
+    #     swag_state_list.append(swag_state)
+
     swag_state_list = []
-    for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-        ckpt = f'checkpoints_teacher/{config.data_subname}/{s}.pickle'
-        with open(ckpt, 'rb') as fp:
-            ckpt = pickle.load(fp)
-            swag_state = ckpt['swag_state']
-            batch_stats = ckpt['batch_stats']
-            image_stats = ckpt['image_stats']
-        swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
+    for swag_ckpt_dir in config.swag_ckpt_dir:
+        resnet_state, _, batch_stats, image_stats = load_resnet(swag_ckpt_dir)
+        d = resnet_state['model']['opt_state']['1']
+        swag_state = namedtuple('SWAGState', d.keys())(*d.values())
         swag_state_list.append(swag_state)
 
     # ------------------------------------------------------------------------
