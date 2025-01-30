@@ -156,11 +156,11 @@ def get_resnet(config, return_emb=False):
     config.model_name = 'FlaxResNet'
     config.model_style = 'FRN-Swish'
     config.model_depth = 32
-    config.model_width = 4 #ResNet32x4
+    config.model_width = 2 if config.data_subname=='c10' else 4 #ResNet32x4
     config.model_planes = 16
     config.model_blocks = None
     config.dtype = jnp.float32
-    config.num_classes = 100 #ResNet32x4
+    config.num_classes = 10 if config.data_subname=='c10' else 100 #ResNet32x4
     config.first_conv = None
     config.first_pool = None
     config.model_nobias = None
@@ -204,10 +204,10 @@ def get_resnet(config, return_emb=False):
 
 
 def get_scorenet(config):
-    config.hidden_size = 512 # ResNet32x4
+    config.hidden_size = 256 if config.data_subname=='c10' else 512 # ResNet32x4
     config.time_embed_dim = 32
     config.num_blocks = 4
-    config.num_classes = 100 # ResNet32x4
+    config.num_classes = 10 if config.data_subname=='c10' else 100 # ResNet32x4
     config.droprate = 0.
     config.time_scale = 1000.
 
@@ -244,10 +244,15 @@ def build_dbn(config):
 
 def fm_sample(score, l0, z, config, num_models):
     batch_size = l0.shape[0]
-    # timesteps = jnp.array([0., 0.8, 1.])
-    # timesteps = jnp.array([0., 0.6, 0.999, 1.])
+    # CIFAR100, ResNet32x4
+    # timesteps = jnp.array([0., 0.8, 1.])  
+    # timesteps = jnp.array([0., 0.6, 0.99, 1.])
     # timesteps = jnp.array([0., 0.4, 0.7, 0.999, 1.])
-    timesteps = jnp.array([0., 0.2, 0.4, 0.6, 0.8, 0.999, 1.])
+    
+    # CIFAR10
+    # timesteps = jnp.array([0., 0.8, 1.])
+    # timesteps = jnp.array([0., 0.6, 0.9, 1.])
+    timesteps = jnp.array([0., 0.5, 0.8, 0.95, 1.])
     steps = len(timesteps)-1
 
     @jax.jit
@@ -404,7 +409,7 @@ def launch(config):
         
         swag_state_list = []
         for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-            ckpt = f'checkpoints_teacher/c100/{s}.pickle' #ResNet32x4
+            ckpt = f'checkpoints_teacher/c10/{s}.pickle' #ResNet32x4
             with open(ckpt, 'rb') as fp:
                 ckpt = pickle.load(fp)
                 swag_state = ckpt['swag_state']
@@ -495,8 +500,10 @@ def launch(config):
     # init settings
     # ------------------------------------------------------------------------
     cross_replica_mean = jax.pmap(lambda x: jax.lax.pmean(x, 'x'), 'x')
-    # state = params
-    state = jax_utils.replicate(state)
+    if config.mode == 'fm':
+        state = jax_utils.replicate(state)
+    else:
+        state = jax_utils.replicate(params)
         
     data_loader = dataloaders["dataloader"]()
     data_loader = jax_utils.prefetch_to_device(data_loader, size=2)
@@ -507,12 +514,20 @@ def launch(config):
         batch = extract(batch, state, jax_utils.replicate(batch_rng))
         # save logits
         logits = batch["logitsA"]
-        # extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+        
         logits = jax.device_put(logits, device=jax.devices("cpu")[0])
-        extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
+        
+        if config.mode in ['kd', 'endd']:
+            extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+        else:
+            extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
+    
     extracted_logits = jnp.stack(extracted_logits)
-    # extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
-    extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
+    if config.mode in ['kd', 'endd']:
+        extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
+    else:
+        extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
+    
     
     print(f'Output shape: {extracted_logits.shape}')
     np.save(f'{config.save_path}{config.data_name}_{config.mode}_{config.name}.npy',
@@ -525,6 +540,7 @@ def main():
     parser.add_argument('--mode', type=str)
     parser.add_argument('--saved_model_path', type=str)
     parser.add_argument('--data_name', type=str, help='name of the dataset (e.g., CIFAR10_x32)')
+    parser.add_argument('--data_subname', type=str, help='subname of the dataset (e.g., c10)')
     parser.add_argument('--name', type=str, help='name of the experiment')
     
     parser.add_argument('--seed', default=2025, type=int)
@@ -533,7 +549,7 @@ def main():
     parser.add_argument('--batch_size', default=200, type=int)
     parser.add_argument('--image_shape', default=(1, 32, 32, 3), type=tuple)
     parser.add_argument('--num_classes', default=10, type=int)
-    parser.add_argument('--num_samples', default=30, type=int)
+    parser.add_argument('--num_samples', default=1024, type=int)
     parser.add_argument('--save_path', default='./logits/', type=str, 
                         help='path to save the extracted logits')
     

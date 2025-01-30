@@ -10,7 +10,7 @@ def ce_loss(logits, labels):
 label = np.load('data/CIFAR100_x32/test_labels.npy')
 print(f'label shape: {label.shape}')
 
-postfix = ['fm_cinic40960']
+postfix = ['fm_simple_mixup_5NFEs']
 # postfix = ['endd_2025', 'endd_2027', 'endd_2028', 'kd_2025', 'kd_2026', 'kd_2027']
 for p in postfix:
     logit = np.load(f'logits/CIFAR100_x32_{p}.npy')
