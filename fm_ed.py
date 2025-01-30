@@ -264,24 +264,24 @@ def launch(config):
     # ------------------------------------------------------------------------
     # prepare teachers for distillation
     # ------------------------------------------------------------------------
-    # # ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]    
-    # swag_state_list = []
-    # for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
-    #     ckpt = f'checkpoints_teacher/{config.data_subname}/{s}.pickle'
-    #     with open(ckpt, 'rb') as fp:
-    #         ckpt = pickle.load(fp)
-    #         swag_state = ckpt['swag_state']
-    #         batch_stats = ckpt['batch_stats']
-    #         image_stats = ckpt['image_stats']
-    #     swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
-    #     swag_state_list.append(swag_state)
-
+    # ckpt = {'CIFAR10_x32': 'c10', 'CIFAR100_x32': 'c100'}[config.data_name]    
     swag_state_list = []
-    for swag_ckpt_dir in config.swag_ckpt_dir:
-        resnet_state, _, batch_stats, image_stats = load_resnet(swag_ckpt_dir)
-        d = resnet_state['model']['opt_state']['1']
-        swag_state = namedtuple('SWAGState', d.keys())(*d.values())
+    for s in [2, 5, 11, 17, 23, 31, 41, 47, 59, 67]:
+        ckpt = f'checkpoints_teacher/{config.data_subname}/{s}.pickle'
+        with open(ckpt, 'rb') as fp:
+            ckpt = pickle.load(fp)
+            swag_state = ckpt['swag_state']
+            batch_stats = ckpt['batch_stats']
+            image_stats = ckpt['image_stats']
+        swag_state = namedtuple('SWAGState', swag_state.keys())(*swag_state.values())
         swag_state_list.append(swag_state)
+
+    # swag_state_list = []
+    # for swag_ckpt_dir in config.swag_ckpt_dir:
+    #     resnet_state, _, batch_stats, image_stats = load_resnet(swag_ckpt_dir)
+    #     d = resnet_state['model']['opt_state']['1']
+    #     swag_state = namedtuple('SWAGState', d.keys())(*d.values())
+    #     swag_state_list.append(swag_state)
 
     # ------------------------------------------------------------------------
     # define and load resnet

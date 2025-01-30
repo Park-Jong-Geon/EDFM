@@ -44,4 +44,4 @@ num_teachers: 1 #30
 num_ensembles: 300
 num_models: 100
 
-kd_ckpt: 'checkpoints/baseline/kd_c100_2025/checkpoint_992'
+kd_ckpt: 'checkpoints/kd_c100_randaugmixup/checkpoint_999'
