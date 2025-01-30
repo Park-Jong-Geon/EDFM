@@ -336,18 +336,20 @@ def launch(config):
         decay_steps=config.optim_ne * config.trn_steps_per_epoch)
 
     if config.optim_base == "adam":
-        base_optim = partial(
-            optax.adamw, learning_rate=scheduler, weight_decay=config.optim_weight_decay
-        )
+        base_optim = optax.adamw(learning_rate=scheduler, 
+                                 weight_decay=config.optim_weight_decay)
     elif config.optim_base == "sgd":
-        base_optim = partial(optax.sgd, learning_rate=scheduler,
-                             momentum=config.optim_momentum)
+        base_optim = optax.chain(
+            optax.add_decayed_weights(config.optim_weight_decay),
+            optax.sgd(learning_rate=scheduler, 
+                      momentum=config.optim_momentum)
+        )
     else:
         raise NotImplementedError
     
     partition_optimizers = {
         "resnet": optax.set_to_zero(),
-        "score": base_optim(),
+        "score": base_optim,
     }
     def tagging(path, v):
         if "resnet" in path:
