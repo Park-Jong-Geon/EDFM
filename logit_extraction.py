@@ -26,6 +26,7 @@ from giung2.models.layers import FilterResponseNorm
 from giung2.data import image_processing
 
 from models.resnet import FlaxResNet
+from models.resnet_fed import FlaxResNetforFED
 from models.mlp import Mlp
 from models.flowmatching import FlowMatching
 
@@ -202,6 +203,52 @@ def get_resnet(config, return_emb=False):
 
     return model
 
+def get_resnet_for_fed(config):
+    config.model_name = 'FlaxResNet'
+    config.model_style = 'FRN-Swish'
+    config.model_depth = 32
+    config.model_width = 2 if config.data_subname=='c10' else 4 #ResNet32x4
+    config.model_planes = 16
+    config.model_blocks = None
+    config.dtype = jnp.float32
+    config.num_classes = 10 if config.data_subname=='c10' else 100 #ResNet32x4
+    config.first_conv = None
+    config.first_pool = None
+    config.model_nobias = None
+
+    if config.model_name == 'FlaxResNet':
+        _ResNet = partial(
+            FlaxResNetforFED,
+            depth=config.model_depth,
+            widen_factor=config.model_width,
+            dtype=jnp.float32,
+            pixel_mean=PIXEL_MEAN,
+            pixel_std=PIXEL_STD,
+            num_classes=config.num_classes,
+            num_planes=config.model_planes,
+            num_blocks=tuple(
+                int(b) for b in config.model_blocks.split(",")
+            ) if config.model_blocks is not None else None,
+            noise_std=0.1, #config.noise_std,
+        )
+    else:
+        raise NotImplementedError
+
+    if config.model_style == "FRN-Swish":
+        model = _ResNet(
+            conv=partial(
+                flax.linen.Conv,
+                use_bias=True,
+                kernel_init=jax.nn.initializers.he_normal(),
+                bias_init=jax.nn.initializers.zeros),
+            norm=FilterResponseNorm,
+            relu=flax.linen.swish)
+    elif config.model_style == 'BN-ReLU':
+        model = _ResNet()
+    else:
+        raise NotImplementedError
+    
+    return model
 
 def get_scorenet(config):
     config.hidden_size = 256 if config.data_subname=='c10' else 512 # ResNet32x4
@@ -246,13 +293,13 @@ def fm_sample(score, l0, z, config, num_models):
     batch_size = l0.shape[0]
     # CIFAR100, ResNet32x4
     # timesteps = jnp.array([0., 0.8, 1.])  
-    # timesteps = jnp.array([0., 0.6, 0.99, 1.])
+    timesteps = jnp.array([0., 0.6, 0.99, 1.])
     # timesteps = jnp.array([0., 0.4, 0.7, 0.999, 1.])
     
     # CIFAR10
     # timesteps = jnp.array([0., 0.8, 1.])
     # timesteps = jnp.array([0., 0.6, 0.9, 1.])
-    timesteps = jnp.array([0., 0.5, 0.8, 0.95, 1.])
+    # timesteps = jnp.array([0., 0.5, 0.8, 0.95, 1.])
     steps = len(timesteps)-1
 
     @jax.jit
@@ -313,7 +360,20 @@ def launch(config):
             training=False, use_running_average=True)
         logits = state["intermediates"]["cls.logit"][0]
         return logits
-    
+
+    resnet_for_fed = get_resnet_for_fed(config)
+    @jax.jit
+    def forward_resnet_fed(params_dict, images, noise, noise_rng):
+        mutable = ["intermediates"]
+        _, state = resnet_for_fed.apply(
+            params_dict, images, noise, noise_rng,
+            rngs=None,
+            mutable=mutable,
+            training=False, use_running_average=True)
+        logits = state["intermediates"]["cls.logit"][0]
+        return logits
+
+
     if config.mode == 'fm':
         print(f"Loading checkpoint {config.saved_model_path}...")
         saved_params, saved_ema_params, saved_batch_stats = load_saved(config.saved_model_path)
@@ -388,7 +448,7 @@ def launch(config):
             rng=state_rng
         )
 
-    elif config.mode == 'kd' or config.mode == 'endd':
+    elif config.mode in ['kd', 'endd', 'fed']:
         rng = jax.random.PRNGKey(config.seed)
         init_rng, sub_rng = jax.random.split(rng)
 
@@ -486,13 +546,30 @@ def launch(config):
         batch["logitsA"] = forward_resnet(params_dict, batch["images"])
         return batch
 
-    assert config.mode in ['kd', 'endd', 'fm', 'teacher']
+    @partial(jax.pmap, axis_name="batch")
+    def extract_from_fed(batch, params, rng):
+        params_dict = pdict(
+            params=params,
+            image_stats=config.image_stats,
+            batch_stats=None) # no batch stats for now     
+        
+        images = jnp.repeat(batch['images'], repeats=config.num_samples, axis=0)
+        noise = jax.random.normal(rng, images.shape) * 0.1
+        
+        pred_logits = forward_resnet_fed(params_dict, images, noise, rng)
+        
+        batch["logitsA"] = pred_logits.reshape(-1, config.num_samples, config.num_classes)  
+        return batch
+
+    assert config.mode in ['kd', 'endd', 'fm', 'teacher', 'fed']
     if config.mode == 'teacher':
         extract = extract_from_teacher
     elif config.mode == 'fm':
         extract = extract_from_fm
     elif config.mode == 'kd' or config.mode == 'endd':
         extract = extract_from_kd
+    elif config.mode == 'fed':
+        extract = extract_from_fed
     else:
         raise NotImplementedError
 
