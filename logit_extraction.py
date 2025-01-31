@@ -530,9 +530,9 @@ def launch(config):
         
         model_bd = dbn.bind(params_dict, rngs=rngs_dict)
         _fm_sample = partial(
-            fm_sample, config=config, num_models=config.num_samples)
+            fm_sample, config=config, num_models=config.virtual_num_samples)
         _, val = model_bd.sample(
-            score_rng, _fm_sample, batch["images"], config.num_samples)
+            score_rng, _fm_sample, batch["images"], config.virtual_num_samples)
         
         batch["logitsA"] = val
         return batch
@@ -553,12 +553,12 @@ def launch(config):
             image_stats=config.image_stats,
             batch_stats=None) # no batch stats for now     
         
-        images = jnp.repeat(batch['images'], repeats=config.num_samples, axis=0)
+        images = jnp.repeat(batch['images'], repeats=config.virtual_num_samples, axis=0)
         noise = jax.random.normal(rng, images.shape) * 0.1
         
         pred_logits = forward_resnet_fed(params_dict, images, noise, rng)
         
-        batch["logitsA"] = pred_logits.reshape(-1, config.num_samples, config.num_classes)  
+        batch["logitsA"] = pred_logits.reshape(-1, config.virtual_num_samples, config.num_classes)  
         return batch
 
     assert config.mode in ['kd', 'endd', 'fm', 'teacher', 'fed']
@@ -582,29 +582,39 @@ def launch(config):
     else:
         state = jax_utils.replicate(params)
         
-    data_loader = dataloaders["dataloader"]()
-    data_loader = jax_utils.prefetch_to_device(data_loader, size=2)
+    # data_loader = dataloaders["dataloader"]()
+    # data_loader = jax_utils.prefetch_to_device(data_loader, size=2)
     
-    extracted_logits = []
-    for batch_idx, batch in tqdm(enumerate(data_loader)):
-        batch_rng = jax.random.fold_in(sub_rng, batch_idx)
-        batch = extract(batch, state, jax_utils.replicate(batch_rng))
-        # save logits
-        logits = batch["logitsA"]
+    j = 0
+    e = []
+    for i in range(config.num_samples//config.virtual_num_samples):
+        data_loader = dataloaders["dataloader"]()
+        data_loader = jax_utils.prefetch_to_device(data_loader, size=2)
+
+        extracted_logits = []
+        for _, batch in tqdm(enumerate(data_loader)):
+            j += 1
+            batch_rng = jax.random.fold_in(sub_rng, j)
+            batch = extract(batch, state, jax_utils.replicate(batch_rng))
+            # save logits
+            logits = batch["logitsA"]
+            
+            logits = jax.device_put(logits, device=jax.devices("cpu")[0])
+            
+            if config.mode in ['kd', 'endd']:
+                extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+            else:
+                extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
         
-        logits = jax.device_put(logits, device=jax.devices("cpu")[0])
-        
+        extracted_logits = jnp.stack(extracted_logits)
         if config.mode in ['kd', 'endd']:
-            extracted_logits.append(logits.reshape(-1, *logits.shape[-1:]))
+            extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
         else:
-            extracted_logits.append(logits.reshape(-1, *logits.shape[-2:]))
+            extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
+
+        e.append(extracted_logits)
     
-    extracted_logits = jnp.stack(extracted_logits)
-    if config.mode in ['kd', 'endd']:
-        extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-1:])
-    else:
-        extracted_logits = extracted_logits.reshape(-1, *extracted_logits.shape[-2:])
-    
+    extracted_logits = np.concatenate(e, axis=1)
     
     print(f'Output shape: {extracted_logits.shape}')
     np.save(f'{config.save_path}{config.data_name}_{config.mode}_{config.name}.npy',
@@ -627,6 +637,7 @@ def main():
     parser.add_argument('--image_shape', default=(1, 32, 32, 3), type=tuple)
     parser.add_argument('--num_classes', default=10, type=int)
     parser.add_argument('--num_samples', default=1024, type=int)
+    parser.add_argument('--virtual_num_samples', default=256, type=int)
     parser.add_argument('--save_path', default='./logits/', type=str, 
                         help='path to save the extracted logits')
     
