@@ -6,18 +6,22 @@ Official implementation of _Ensemble Distribution Distillation via Flow Matching
 
 ## Installation
 1. Google Cloud TPUs (https://cloud.google.com/tpu)
+
 Clone this repository.
 ```bash
 git clone https://github.com/Park-Jong-Geon/EDFM.git
 ```
+
 As JAX 0.4.3 is now deprecated, please download `jaxlib-0.4.3-cp39-cp39-manylinux2014_x86_64.whl` from `https://dashboard.stablebuild.com/pypi-deleted-packages/pkg/jaxlib/0.4.3`.
 Move the wheel file into the cloned repository.
+
 Create a new conda environment.
 ```bash
 conda env create -f edfm.yaml
 ```
 
 2. CUDA
+
 For installations in CUDA environments, you only need to modify jaxlib version accordingly in dbn.yaml
 
 
