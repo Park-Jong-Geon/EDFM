@@ -1,22 +1,28 @@
-# Fast Ensembling with Diffusion Schrödinger Bridge
+# Ensemble Distribution Distillation via Flow Matching
 
-Official implementation of _Fast Ensembling with Diffusion Schrödinger Bridge_ [[`ICLR 2024`](https://openreview.net/forum?id=Mgq6kxl115)].
+Official implementation of _Ensemble Distribution Distillation via Flow Matching_ [(`ICML 2025`)(https://icml.cc/virtual/2025/poster/43616)].
 
 
 
-## Installation (CUDA 11.7)
-### Conda
+## Installation
+1. Google Cloud TPUs (https://cloud.google.com/tpu)
+Clone this repository.
 ```bash
-conda create -n dbn python=3.9.16
-conda activate dbn
+git clone https://github.com/Park-Jong-Geon/EDFM.git
 ```
-### pip packages
+As JAX 0.4.3 is now deprecated, please download `jaxlib-0.4.3-cp39-cp39-manylinux2014_x86_64.whl` from `https://dashboard.stablebuild.com/pypi-deleted-packages/pkg/jaxlib/0.4.3`.
+Move the wheel file into the cloned repository.
+Create a new conda environment.
 ```bash
-source scripts/requirements.sh
+conda env create -f edfm.yaml
 ```
+
+2. CUDA
+For installations in CUDA environments, you only need to modify jaxlib version accordingly in dbn.yaml
+
 
 ## Install datasets
-### CIFAR10
+### CIFAR-10
 ```bash
 cd data
 wget https://www.dropbox.com/s/8s5unpaxdrt6r7e/CIFAR10_HMC.tar.gz
@@ -24,7 +30,7 @@ tar -xvzf CIFAR10_HMC.tar.gz
 mv CIFAR10_HMC CIFAR10_x32
 cd -
 ```
-### CIFAR100
+### CIFAR-100
 ```bash
 cd data
 wget https://www.dropbox.com/s/bvljrqsttemfdzv/CIFAR100_HMC.tar.gz
@@ -32,20 +38,7 @@ tar -xvzf CIFAR100_HMC.tar.gz
 mv CIFAR100_HMC CIFAR100_x32
 cd -
 ```
-### TinyImageNet
-```bash
-cd data
-wget https://www.dropbox.com/s/rcxylz8dn7fm03m/TinyImageNet200_x32.tar.gz
-tar -xvzf TinyImageNet200_x32.tar.gz
-cd -
-```
-### ImageNet (64x64)
-```bash
-cd data
-wget https://www.dropbox.com/s/urh77zy42xxzhgo/ImageNet1k_x64.tar.gz
-tar -xvzf ImageNet1k_x64.tar.gz
-cd -
-```
+
 
 ## Collect checkpoints to distill
 ```bash
@@ -55,22 +48,6 @@ python sgd.py \
     --seed 2024
 ```
 
-## Register the trained checkpoints
-You need to modify utils.py
-```python
-def model_list(data_name, model_style, shared_head=False, tag=""):
-    ...
-    elif data_name == "CIFAR10_x32" and model_style == "FRN-Swish":
-        ...
-        elif tag == "AtoABC":
-            return [
-                "./checkpoints/frn_sd2_be",
-                "./checkpoints/frn_sd3_be",
-                "./checkpoints/frn_sd5_be",
-                "./checkpoints/frn_sd2024_be",
-            ]
-        ...
-```
 
 ## DBN training (example checkpoints are already given)
 ```bash
@@ -101,36 +78,13 @@ python proxy_end2.py \
     --save ./checkpoints/proxy_end2/c10/example
 ```
 
-## Evaluate trained models
-
-### DE
-```bash
-python test_dbn.py \
-    --config config_test/c10/de_example.yaml
-```
-### DBN
-```bash
-python test_dbn.py \
-    --config config_test/c10/dbn_example.yaml
-```
-### ED
-```bash
-python test_dbn.py \
-    --config config_test/c10/naive_ed_example.yaml
-```
-### END^2
-```bash
-python test_dbn.py \
-    --config config_test/c10/proxy_end2_example.yaml
-```
-
 ## Citation
-
+If you found this work useful, please consider citing our paper.
 ```
-@inproceedings{kim2024fast,
-    title     = {Fast Ensembling with Diffusion Schrodinger Bridge},
-    author    = {Kim, Hyunsu and Yoon, Jongmin and Lee, Juho},
-    booktitle = {International Conference on Learning Representations (ICLR)},
-    year      = {2024},
+@inproceedings{park2025edfm,
+    title     = {Ensemble Distribution Distillation via Flow Matching},
+    author    = {Park, Jonggeon and Nam, Giung and Kim, Hyunsu and Yoon, Jongmin and Lee, Juho},
+    booktitle = {International Conference on Machine Learning (ICML)},
+    year      = {2025},
 }
 ```
