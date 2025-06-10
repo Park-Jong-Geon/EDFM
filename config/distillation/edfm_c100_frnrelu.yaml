@@ -18,7 +18,7 @@ model_name: FlaxResNet
 first_conv: null
 first_pool: null
 model_nobias: null
-pretrained_resnet: 'checkpoints/kd_c100_randaugmixup/checkpoint_999'
+pretrained_resnet: 'checkpoints_teacher/kd/c100/checkpoint'
 
 # Denoising MLP
 hidden_size: 512

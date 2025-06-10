@@ -126,7 +126,7 @@ def swag(freq: int, rank: int, start_step: int) -> optax.GradientTransformation:
   assert start_step % freq == 0, 'start_step must be divisible by freq.'
   if rank < 2:
     logging.warning('Rank must be greater than 1. Switching to swag_diag.')
-    return swag_diag(freq)
+    return swag_diag(freq, start_step)
 
   def init_fn(params: optax.Params) -> SWAGState:
     return SWAGState(

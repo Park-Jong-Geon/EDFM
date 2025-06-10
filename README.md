@@ -25,7 +25,7 @@ conda env create -f edfm.yaml
 For installations in CUDA environments, you only need to modify `jaxlib` version accordingly in `edfm.yaml`
 
 
-## Install datasets
+## Download datasets
 ### CIFAR-10
 ```bash
 cd data
@@ -44,42 +44,51 @@ cd -
 ```
 
 
-## Collect checkpoints to distill
+## Train MultiSWAG teachers
+To train MultiSWAG teachers for CIFAR-10, execute the following command. (Modify the config file accordingly for CIFAR-100.)
+Note that pretrained teachers for CIFAR-10 and CIFAR-100 datasets are provided in `checkpoints_teacher` directory.
 ```bash
-python sgd.py \
-    --config config_sgd/c10_frnrelu_sgd.yaml \
-    --save ./checkpoints/frn_sd2024_be.yaml \
-    --seed 2024
+python sgd_swag.py\ 
+    --config config/teacher/c10_frnrelu_sgd_swag.yaml \ 
+    --save {save_dir} \ 
+    --exp_name {exp_name}
 ```
 
-
-## DBN training (example checkpoints are already given)
+## EDFM
+To train EDFM for CIFAR-10, execute the following command. (Modify the config file accordingly for CIFAR-100.)
 ```bash
-python dbn_tidy.py \
-    --config config_dsb/c10_frnrelu_AtoABC_ensemble.yaml \
-    --save ./checkpoints/dbn/c10/example
+python edfm.py\ 
+    --config config/distillation/edfm_c10_frnrelu.yaml\ 
+    --save {save_dir}\ 
+    --exp_name {exp_name}
 ```
 
-## DBN diffusion step distillation
+## Baselines
+### KD (https://arxiv.org/abs/1503.02531)
+To train KD for CIFAR-10, execute the following command. (Modify the config file accordingly for CIFAR-100.)
 ```bash
-python dbn_tidy.py \
-    --config config_dsb/c10_frnrelu_AtoABC_distill.yaml \
-    --distill ./checkpoints/dbn/c10/example \
-    --save ./checkpoints/dbn/c10/example_distilled
+python kd_and_endd.py\ 
+    --config config/distillation/kd_c10_frnrelu.yaml\ 
+    --save {save_dir}\ 
+    --exp_name {exp_name}
 ```
 
-## Ensemble Distillation
+### EnDD (https://arxiv.org/abs/2105.06987)
+To train EnDD for CIFAR-10, execute the following command. (Modify the config file accordingly for CIFAR-100.)
 ```bash
-python naive_ed.py \
-    --config config_naive_ed/c10_frnrelu_shX_t3.yaml \
-    --save ./checkpoints/naive_ed/c10/example
+python kd_and_endd.py\ 
+    --config config/distillation/endd_c10_frnrelu.yaml\ 
+    --save {save_dir}\ 
+    --exp_name {exp_name}
 ```
 
-## Ensemble Distribution Distillation
+### FED (https://arxiv.org/abs/2206.02183)
+To train FED for CIFAR-10, execute the following command. (Modify the config file accordingly for CIFAR-100.)
 ```bash
-python proxy_end2.py \
-    --config config_proxy_end2/c10_frnrelu_shX_t3.yaml \
-    --save ./checkpoints/proxy_end2/c10/example
+python fed.py\ 
+    --config config/distillation/fed_c10_frnrelu.yaml\ 
+    --save {save_dir}\ 
+    --exp_name {exp_name}
 ```
 
 ## Citation

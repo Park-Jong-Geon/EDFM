@@ -129,8 +129,6 @@ def build_dataloaders(config, corrupted=False):
     Args:
         config.data_root (str) : root directory containing datasets (e.g., ./data/).
         config.data_name (str) : name of the dataset (e.g., CIFAR10_x32).
-        config.data_augmentation (str) : preset name for the train data augmentation (e.g., standard).
-        config.data_proportional (float) : ratio value for the proportional train data (e.g., 100pct).
 
     Return:
         dataloaders (dict) : it contains dataloader, trn_loader, val_loader, and tst_loader.
@@ -316,12 +314,12 @@ def build_dataloaders(config, corrupted=False):
         num_classes = 1000
 
     # proportional train data
-    trn_images = trn_images[:int(len(trn_images) * config.data_proportional)]
-    trn_labels = trn_labels[:int(len(trn_labels) * config.data_proportional)]
+    trn_images = trn_images[:int(len(trn_images))]
+    trn_labels = trn_labels[:int(len(trn_labels))]
 
     # transforms
     trn_transform = _set_augmentation(
-        config.data_augmentation, image_size=image_shape[1])
+        None, image_size=image_shape[1])
     val_transform = jax.jit(jax.vmap(image_processing.ToTensorTransform()))
 
     dataloaders = dict()

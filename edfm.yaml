@@ -1,4 +1,4 @@
-name: dbn
+name: edfm
 channels:
   - defaults
 dependencies:
