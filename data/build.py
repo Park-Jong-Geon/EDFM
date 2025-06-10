@@ -248,28 +248,28 @@ def build_dataloaders(config, corrupted=False):
             raise ValueError("Invalid data_subname")
 
     if config.data_name == 'Birds200_x32':
-        # 5120 /   874 /  5794
+        # 5120 / 874 / 5794
         trn_images, val_images = trn_images[: 5120], trn_images[5120:]
         trn_labels, val_labels = trn_labels[: 5120], trn_labels[5120:]
         image_shape = (1, 32, 32, 3)
         num_classes = 200
 
     if config.data_name == 'CIFAR10_x32':
-        # 40960 /  9040 / 10000
+        # 40960 / 9040 / 10000
         trn_images, val_images = trn_images[:40960], trn_images[40960:]
         trn_labels, val_labels = trn_labels[:40960], trn_labels[40960:]
         image_shape = (1, 32, 32, 3)
         num_classes = 10
 
     if config.data_name == 'CIFAR100_x32':
-        # 40960 /  9040 / 10000
+        # 40960 / 9040 / 10000
         trn_images, val_images = trn_images[:40960], trn_images[40960:]
         trn_labels, val_labels = trn_labels[:40960], trn_labels[40960:]
         image_shape = (1, 32, 32, 3)
         num_classes = 100
 
     if config.data_name == 'Dogs120_x32':
-        # 10240 /  1760 /  8580
+        # 10240 / 1760 /  8580
         trn_images, val_images = trn_images[:10240], trn_images[10240:]
         trn_labels, val_labels = trn_labels[:10240], trn_labels[10240:]
         image_shape = (1, 32, 32, 3)
@@ -283,7 +283,7 @@ def build_dataloaders(config, corrupted=False):
         num_classes = 101
 
     if config.data_name == 'Pets37_x32':
-        # 2560 /  1120 /  3669
+        # 2560 / 1120 /  3669
         trn_images, val_images = trn_images[: 2560], trn_images[2560:]
         trn_labels, val_labels = trn_labels[: 2560], trn_labels[2560:]
         image_shape = (1, 32, 32, 3)
@@ -300,8 +300,6 @@ def build_dataloaders(config, corrupted=False):
         # 81920 / 18080 / 10000
         trn_images, val_images = trn_images[:90000], trn_images[90000:]
         trn_labels, val_labels = trn_labels[:90000], trn_labels[90000:]
-        # trn_images, val_images = trn_images[:81920], trn_images[81920:]
-        # trn_labels, val_labels = trn_labels[:81920], trn_labels[81920:]
         image_shape = (1, 64, 64, 3)
         num_classes = 200
 
@@ -314,8 +312,6 @@ def build_dataloaders(config, corrupted=False):
     if config.data_name == 'ImageNet1k_x64':
         trn_images, val_images = trn_images, tst_images
         trn_labels, val_labels = trn_labels, tst_labels
-        # trn_images, val_images = trn_images[:123116], trn_images[123116:]
-        # trn_labels, val_labels = trn_labels[:123116], trn_labels[123116:]
         image_shape = (1, 64, 64, 3)
         num_classes = 1000
 
