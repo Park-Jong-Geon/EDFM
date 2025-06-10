@@ -1,0 +1,23 @@
+# Data
+data_name: CIFAR10_x32
+
+# ResNet
+model_depth: 32
+model_width: 2
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+# Training
+optim_bs: 256
+start_decay_epoch: 10
+start_swa_epoch: 800
+optim_ne: 1000
+optim_lr: 0.1
+optim_swa_lr: 0.01
+optim_weight_decay: 0.0005
+optim: sgd
+
+# SWAG related parameters
+freq: 1
+rank: 1
+num_swag_samples: 3

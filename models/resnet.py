@@ -50,12 +50,6 @@ class FlaxResNet(nn.Module):
         # standardize input images...
         x = x - jnp.reshape(jnp.array(self.pixel_mean, dtype=jnp.float32), (1, 1, 1, -1))
         x = x / jnp.reshape(jnp.array(self.pixel_std, dtype=jnp.float32), (1, 1, 1, -1))
-        # m = self.variable('image_stats', 'm', lambda _: jnp.array(
-        #     self.pixel_mean, dtype=jnp.float32), (x.shape[-1],))
-        # s = self.variable('image_stats', 's', lambda _: jnp.array(
-        #     self.pixel_std, dtype=jnp.float32), (x.shape[-1],))
-        # x = x - jnp.reshape(m.value, (1, 1, 1, -1))
-        # x = x / jnp.reshape(s.value, (1, 1, 1, -1))
 
         # specify block structure and widen factor...
         num_planes = self.num_planes

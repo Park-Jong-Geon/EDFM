@@ -1,0 +1,36 @@
+baseline_method: ProxyEnDD
+
+# Data
+data_name: CIFAR10_x32
+
+# Data augmentation
+mixup_alpha: 0.4
+
+# Teacher
+teacher_dir: "checkpoints_teacher/c10"
+num_teachers: 30 # Number of teachers to use for distillation
+
+# ResNet
+num_classes: 10
+model_depth: 32
+model_width: 2
+model_planes: 16
+model_blocks: null
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+# Training
+optim_bs: 256
+optim_ne: 1000
+optim_lr: 0.05
+optim_weight_decay: 0.001
+optim_momentum: 0.9
+optim: sgd
+warmup_factor: 0.01
+warmup_steps: 0
+
+# ProxyEnDD related parameters
+dist_temp: 1
+s_offset: 1
+t_offset: 1
+eps: 1.0e-8

@@ -1,0 +1,47 @@
+# Data
+data_name: CIFAR10_x32
+data_subname: c10
+
+# Data augmentation
+mixup_alpha: 0.4
+
+# Teacher
+teacher_dir: "checkpoints_teacher/c10"
+
+# ResNet
+model_depth: 32
+model_width: 2
+model_planes: 16
+model_blocks: null
+model_style: FRN-Swish
+model_name: FlaxResNet
+first_conv: null
+first_pool: null
+model_nobias: null
+pretrained_resnet: 'checkpoints/baseline/kd_c10_2025/checkpoint_985'
+
+# Denoising MLP
+hidden_size: 256
+time_embed_dim: 32
+num_blocks: 4
+num_classes: 10
+droprate: 0.
+time_scale: 1000.
+
+# Training
+optim_bs: 256
+optim_ne: 1000
+optim_lr: 0.0001
+optim_base: sgd
+optim_weight_decay: 0.0005
+optim_momentum: 0.9
+ema_decay: 0.
+mse_power: 2
+
+# Flow Matching
+noise_var: 4
+train_time_trunc: 0.001
+train_time_exp_base: 3
+sample_time_exp_base: 0.5
+sample_num_steps: 7
+num_ensembles: 32

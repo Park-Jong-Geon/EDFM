@@ -1,0 +1,33 @@
+baseline_method: KD
+
+# Data
+data_name: CIFAR100_x32
+
+# Data augmentation
+mixup_alpha: 0.4
+
+# Teacher
+teacher_dir: "checkpoints_teacher/c100"
+num_teachers: 30 # Number of teachers to use for distillation
+
+# ResNet
+num_classes: 100
+model_depth: 32
+model_width: 4
+model_planes: 16
+model_blocks: null
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+# Training
+optim_bs: 256
+optim_ne: 1000
+optim_lr: 0.1
+optim_weight_decay: 0.0005
+optim_momentum: 0.9
+optim: sgd
+warmup_factor: 0.01
+warmup_steps: 5
+
+# Temperature
+dist_temp: 1

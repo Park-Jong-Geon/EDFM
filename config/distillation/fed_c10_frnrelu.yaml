@@ -1,0 +1,32 @@
+# Data
+data_name: CIFAR10_x32
+
+# Data augmentation
+mixup_alpha: 0.4
+
+# Teacher
+teacher_dir: "checkpoints_teacher/c10"
+num_teachers: 8 # Number of teachers to use for distillation
+num_ensembles: 1 # Number of ensembles from the student to use for evaluation
+
+# ResNet
+num_classes: 10
+model_depth: 32
+model_width: 2
+model_planes: 16
+model_blocks: null
+model_style: FRN-Swish
+model_name: FlaxResNet
+
+# Training
+optim_bs: 64
+optim_ne: 250
+optim_lr: 0.001
+optim_weight_decay: 0.
+optim: adam
+optim_boundaries_and_scales: {175: 0.33, 225: 0.33, 275: 0.33, 350: 0.33, 400: 0.33}
+
+# FED related parameters
+noise_std: 0.1
+kernel: rbf
+bandwidth_range: [2, 10, 20, 50]
