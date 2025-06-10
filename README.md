@@ -22,7 +22,7 @@ conda env create -f edfm.yaml
 
 #### 2. CUDA
 
-For installations in CUDA environments, you only need to modify jaxlib version accordingly in dbn.yaml
+For installations in CUDA environments, you only need to modify `jaxlib` version accordingly in `edfm.yaml`
 
 
 ## Install datasets
@@ -83,7 +83,7 @@ python proxy_end2.py \
 ```
 
 ## Citation
-If you found this work useful, please consider citing our paper.
+Please consider citing our paper if you found it useful. 
 ```
 @inproceedings{park2025edfm,
     title     = {Ensemble Distribution Distillation via Flow Matching},
