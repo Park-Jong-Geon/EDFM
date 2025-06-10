@@ -5,7 +5,7 @@ Official implementation of _Ensemble Distribution Distillation via Flow Matching
 
 
 ## Installation
-1. Google Cloud TPUs (https://cloud.google.com/tpu)
+##1. Google Cloud TPUs (https://cloud.google.com/tpu)
 
 Clone this repository.
 ```bash
@@ -20,7 +20,7 @@ Create a new conda environment.
 conda env create -f edfm.yaml
 ```
 
-2. CUDA
+##2. CUDA
 
 For installations in CUDA environments, you only need to modify jaxlib version accordingly in dbn.yaml
 
