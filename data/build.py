@@ -319,7 +319,7 @@ def build_dataloaders(config, corrupted=False):
 
     # transforms
     trn_transform = _set_augmentation(
-        None, image_size=image_shape[1])
+        'none', image_size=image_shape[1])
     val_transform = jax.jit(jax.vmap(image_processing.ToTensorTransform()))
 
     dataloaders = dict()
