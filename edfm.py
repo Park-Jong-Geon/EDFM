@@ -302,7 +302,8 @@ def launch(config):
             return "score"
         else:
             raise NotImplementedError
-    partitions = flax.traverse_util.path_aware_map(tagging, variables["params"])
+    partitions = flax.core.freeze(
+        flax.traverse_util.path_aware_map(tagging, variables["params"]))
     optimizer = optax.multi_transform(partition_optimizers, partitions)
     
     # Create train state
@@ -318,8 +319,8 @@ def launch(config):
 
     # Load ResNet
     pretrained_resnet_param, _, _, _ = load_saved(config.pretrained_resnet)
-    state = state.replace(params=dict(resnet=pretrained_resnet_param, 
-                                      score=state.params["score"]))
+    state = state.replace(params=freeze(dict(resnet=pretrained_resnet_param,
+                                             score=state.params["score"])),)
     if config.resume:
         if tx_saved:
             print("Load saved optimizer")
