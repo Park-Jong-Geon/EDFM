@@ -22,8 +22,12 @@ conda env create -f edfm.yaml
 
 #### 2. CUDA
 
-For installations in CUDA environments, you only need to modify `jaxlib` version accordingly in `edfm.yaml`
+For installations in CUDA environments, clone `cuda` branch instead of `main`.
 
+Create a new conda environment.
+```bash
+conda env create -f edfm.yaml
+```
 
 ## Download datasets
 ### CIFAR-10
