@@ -173,7 +173,6 @@ def fm_sample(score, l0, z, config, num_models):
     timesteps = jnp.array([(1-a**i)/(1-a**steps) 
                            for i in range(steps+1)])
 
-    @jax.jit
     def euler_solver(n, l_n):
         current_t = jnp.array([timesteps[n]])
         current_t = jnp.tile(current_t, [batch_size])
@@ -185,7 +184,6 @@ def fm_sample(score, l0, z, config, num_models):
         euler_l_n = l_n + batch_mul(next_t-current_t, eps)
         return euler_l_n, eps
     
-    @jax.jit
     def heun_solver(n, l_n):
         current_t = jnp.array([timesteps[n]])
         current_t = jnp.tile(current_t, [batch_size])
@@ -302,8 +300,7 @@ def launch(config):
             return "score"
         else:
             raise NotImplementedError
-    partitions = flax.core.freeze(
-        flax.traverse_util.path_aware_map(tagging, variables["params"]))
+    partitions = flax.traverse_util.path_aware_map(tagging, variables["params"])
     optimizer = optax.multi_transform(partition_optimizers, partitions)
     
     # Create train state
@@ -319,8 +316,9 @@ def launch(config):
 
     # Load ResNet
     pretrained_resnet_param, _, _, _ = load_saved(config.pretrained_resnet)
-    state = state.replace(params=freeze(dict(resnet=pretrained_resnet_param,
-                                             score=state.params["score"])),)
+    state = state.replace(params=dict(resnet=pretrained_resnet_param, 
+                                      score=state.params["score"]))
+    
     if config.resume:
         if tx_saved:
             print("Load saved optimizer")
