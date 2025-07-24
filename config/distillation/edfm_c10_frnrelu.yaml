@@ -42,6 +42,6 @@ mse_power: 2
 noise_var: 4
 train_time_trunc: 0.001
 train_time_exp_base: 3
-sample_time_exp_base: 0.5
+sample_time_exp_base: 0.7
 sample_num_steps: 7
 num_ensembles: 32
