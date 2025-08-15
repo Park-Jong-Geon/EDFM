@@ -321,6 +321,7 @@ def launch(config):
     pretrained_resnet_param, _, _, _ = load_saved(config.pretrained_resnet)
     state = state.replace(params=freeze(dict(resnet=pretrained_resnet_param,
                                              score=state.params["score"])),)
+    
     if config.resume:
         if tx_saved:
             print("Load saved optimizer")
@@ -360,11 +361,9 @@ def launch(config):
 
     # Label with teacher predictions
     @partial(jax.pmap, axis_name="batch")
-    def step_label(state, batch):
+    def step_label(state, batch, swag_state):
         rng = state.rng
-        swag_state = random.choice(swag_state_list)
         swag_param = sample_swag_diag(1, rng, swag_state)[0]
-        rng, _ = jax.random.split(rng)
         res_params_dict = dict(params=swag_param)
         
         images = batch["images"]
@@ -582,7 +581,11 @@ def launch(config):
             batch["images"] /= 255.0
             if config.mixup_alpha > 0:
                 batch = step_mixup(state, batch)
-            batch = step_label(state, batch)
+        
+            swag_state = random.choice(swag_state_list)
+            swag_state = jax_utils.replicate(swag_state)
+            batch = step_label(state, batch, swag_state)
+
             state, metrics = step_train(state, batch)
             train_metrics.append(metrics)
 
