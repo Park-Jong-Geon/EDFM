@@ -561,6 +561,8 @@ def launch(config):
         )
         return aug_img
 
+    rep_swag_state_list = [jax_utils.replicate(swag_state) 
+                           for swag_state in swag_state_list]
     for epoch_idx in tqdm(range(config.optim_ne)):
         epoch_rng = jax.random.fold_in(sub_rng, epoch_idx)
         train_rng, val_rng = jax.random.split(epoch_rng, 2)
@@ -579,8 +581,7 @@ def launch(config):
             if config.mixup_alpha > 0:
                 batch = step_mixup(state, batch)
                 
-            swag_state = random.choice(swag_state_list)
-            swag_state = jax_utils.replicate(swag_state)    
+            swag_state = random.choice(rep_swag_state_list)  
             batch = step_label(state, batch, swag_state)
             
             state, metrics = step_train(state, batch)
